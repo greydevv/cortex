@@ -43,6 +43,7 @@ impl<'a> Lexer<'_> {
     }
 
     pub fn next_token(&mut self) -> Token {
+        self.skip_junk();
         if self.eof() {
             return Token::eof(self.loc);
         } else if self.c.is_numeric() {
@@ -71,6 +72,28 @@ impl<'a> Lexer<'_> {
         };
         self.next_char();
         Token::new(kind, val, loc)
+    }
+
+    fn skip_junk(&mut self) {
+        self.skip_whitespace();
+        if self.c == '/' && *self.chars.peek().unwrap() == '/'
+        {
+            self.skip_comment();
+            self.skip_junk();
+        }
+    }
+
+    fn skip_comment(&mut self) {
+        // skip entire line
+        while self.c != '\n' && self.c != '\0' {
+            self.next_char();
+        }
+    }
+
+    fn skip_whitespace(&mut self) {
+        while self.c.is_whitespace() {
+            self.next_char();
+        }
     }
 
     pub fn eof(&self) -> bool {
