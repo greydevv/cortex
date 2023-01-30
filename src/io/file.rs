@@ -29,11 +29,15 @@ pub struct SourceLocation {
 }
 
 impl SourceLocation {
-    pub fn default() -> SourceLocation {
+    pub fn new(line: u32, col: u32) -> SourceLocation {
         SourceLocation {
-            line: 1,
-            col: 1,
+            line,
+            col,
         }
+    }
+
+    pub fn default() -> SourceLocation {
+        SourceLocation::new(1, 1)
     }
 }
 
