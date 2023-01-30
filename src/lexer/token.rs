@@ -4,8 +4,8 @@ use crate::io::file::SourceLocation;
 
 pub struct Token {
     pub kind: TokenKind,
-    val: String,
-    loc: SourceLocation,
+    pub val: String,
+    pub loc: SourceLocation,
 }
 
 impl Token {
@@ -36,7 +36,7 @@ impl fmt::Display for Token {
     }
 }
 
-#[derive(PartialEq, strum_macros::Display)]
+#[derive(PartialEq, Debug, strum_macros::Display)]
 pub enum TokenKind {
     Num,
     Scolon,
@@ -45,7 +45,7 @@ pub enum TokenKind {
     Unknown,
 }
 
-#[derive(PartialEq)]
+#[derive(PartialEq, Debug)]
 pub enum OpKind {
     Plus,
 }
