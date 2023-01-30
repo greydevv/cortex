@@ -1,7 +1,7 @@
 use std::iter::Peekable;
 
 use crate::io::file::SourceLocation;
-use crate::lexer::token::{ Token, TokenKind, OpKind };
+use crate::lexer::token::{ Token, TokenKind, OpKind, KwdKind };
 
 pub mod token;
 
@@ -45,10 +45,25 @@ impl<'a> Lexer<'_> {
         self.skip_junk();
         if self.eof() {
             return Token::eof(self.loc);
+        } else if self.c.is_alphabetic() {
+            return self.lex_alpha();
         } else if self.c.is_numeric() {
             return self.lex_num();
         } else {
             return self.lex_other();
+        }
+    }
+
+    fn lex_alpha(&mut self) -> Token {
+        let mut val = String::new();
+        let loc = self.loc;
+        while self.c.is_alphanumeric() {
+            val.push(self.c);
+            self.next_char();
+        }
+        match KwdKind::from_string(&val) {
+            Some(kind) => Token::new(TokenKind::Kwd(kind), val, loc),
+            None => Token::new(TokenKind::Id, val, loc),
         }
     }
 
@@ -148,4 +163,25 @@ mod tests {
         assert_eq!(tok.val, String::from("\0"));
         assert_eq!(tok.loc, SourceLocation::new(4, 3));
     }
+
+    #[test]
+    fn keywords() {
+        let src = String::from("func include for");
+        let mut lexer = Lexer::new(&src);
+        let expected_toks = vec![
+            Token::new(TokenKind::Kwd(KwdKind::Func), String::from("func"), SourceLocation::new(1, 1)),
+            Token::new(TokenKind::Kwd(KwdKind::Include), String::from("include"), SourceLocation::new(1, 6)),
+            Token::new(TokenKind::Kwd(KwdKind::For), String::from("for"), SourceLocation::new(1, 14)),
+            Token::new(TokenKind::EOF, String::from("\0"), SourceLocation::new(1, 16)),
+        ];
+
+        for expected in expected_toks {
+            let tok = lexer.next_token();
+            assert_eq!(tok.kind, expected.kind);
+            assert_eq!(tok.val, expected.val);
+            assert_eq!(tok.loc, expected.loc);
+        }
+    }
+
+
 }
