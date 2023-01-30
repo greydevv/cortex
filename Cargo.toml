@@ -9,3 +9,6 @@ edition = "2021"
 colored = "2.0.0"
 strum = "0.24"
 strum_macros = "0.24"
+
+[lib]
+doctest = false
