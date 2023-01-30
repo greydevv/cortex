@@ -36,9 +36,8 @@ impl<'a> Lexer<'_> {
                 self.loc.line += 1;
                 self.loc.col = 1;
             },
-            _ => {
-                self.loc.col += 1;
-            }
+            '\0' => (),
+            _ => self.loc.col += 1,
         }
     }
 
@@ -98,5 +97,55 @@ impl<'a> Lexer<'_> {
 
     pub fn eof(&self) -> bool {
         self.c == '\0'
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn empty_file() {
+        let src = String::new();
+        let mut lexer = Lexer::new(&src);
+
+        let tok = lexer.next_token();
+        assert_eq!(tok.kind, TokenKind::EOF);
+        assert_eq!(tok.val, String::from("\0"));
+        assert_eq!(tok.loc, SourceLocation::new(1, 1));
+    }
+
+    #[test]
+    fn leading_whitespace() {
+        let src = String::from("  \n\n");
+        let mut lexer = Lexer::new(&src);
+
+        let tok = lexer.next_token();
+        assert_eq!(tok.kind, TokenKind::EOF);
+        assert_eq!(tok.val, String::from("\0"));
+        assert_eq!(tok.loc, SourceLocation::new(3, 1));
+    }
+
+    #[test]
+    fn trailing_whitespace() {
+        let src = String::from(";\n\n  ");
+        let mut lexer = Lexer::new(&src);
+
+        lexer.next_token();
+        let tok = lexer.next_token();
+        assert_eq!(tok.kind, TokenKind::EOF);
+        assert_eq!(tok.val, String::from("\0"));
+        assert_eq!(tok.loc, SourceLocation::new(3, 3));
+    }
+
+    #[test]
+    fn leading_and_trailing_whitespace() {
+        let src = String::from("  \n\n  \n  ");
+        let mut lexer = Lexer::new(&src);
+
+        let tok = lexer.next_token();
+        assert_eq!(tok.kind, TokenKind::EOF);
+        assert_eq!(tok.val, String::from("\0"));
+        assert_eq!(tok.loc, SourceLocation::new(4, 3));
     }
 }
