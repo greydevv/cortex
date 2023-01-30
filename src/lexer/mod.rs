@@ -1,6 +1,7 @@
 use std::iter::Peekable;
 
 use crate::io::file::SourceLocation;
+use crate::io::error::LexicalError;
 use crate::lexer::token::{ Token, TokenKind, OpKind, KwdKind };
 
 pub mod token;
@@ -41,14 +42,14 @@ impl<'a> Lexer<'_> {
         }
     }
 
-    pub fn next_token(&mut self) -> Token {
+    pub fn next_token(&mut self) -> Result<Token, LexicalError> {
         self.skip_junk();
         if self.eof() {
-            return Token::eof(self.loc);
+            return Ok(Token::eof(self.loc));
         } else if self.c.is_alphabetic() {
-            return self.lex_alpha();
+            return Ok(self.lex_alpha());
         } else if self.c.is_numeric() {
-            return self.lex_num();
+            return Ok(self.lex_num());
         } else {
             return self.lex_other();
         }
@@ -77,15 +78,45 @@ impl<'a> Lexer<'_> {
         Token::new(TokenKind::Num, val, loc)
     }
 
-    fn lex_other(&mut self) -> Token {
+    fn lex_other(&mut self) -> Result<Token, LexicalError> {
         let loc = self.loc;
         let (kind, val) = match self.c {
             ';' => (TokenKind::Scolon, String::from(";")),
             '+' => (TokenKind::Op(OpKind::Plus), String::from("+")),
+            '"' => return self.lex_string(),
             _ => (TokenKind::Unknown, self.c.to_string()),
         };
         self.next_char();
-        Token::new(kind, val, loc)
+        Ok(Token::new(kind, val, loc))
+    }
+
+    fn lex_string(&mut self) -> Result<Token, LexicalError> {
+        let mut value = String::new();
+        // TODO: when computing length of token for future implementation of SourceLocation, need
+        // to make sure that the quotes are included in final token length.
+        let loc = self.loc.clone();
+
+        // eat opening quote
+        self.next_char();
+
+        loop {
+            match self.c {
+                '\0' => {
+                    return Err(LexicalError::syntax_err("Unterminated string literal."));
+                },
+                '"' => {
+                    // eat closing quote
+                    self.next_char();
+                    return Ok(Token::new(
+                        TokenKind::String,
+                        value,
+                        loc,
+                    ));
+                },
+                _ => value.push(self.c)
+            }
+            self.next_char();
+        }
     }
 
     fn skip_junk(&mut self) {
@@ -120,52 +151,56 @@ mod tests {
     use super::*;
 
     #[test]
-    fn empty_file() {
+    fn empty_file() -> Result<(), LexicalError> {
         let src = String::new();
         let mut lexer = Lexer::new(&src);
 
-        let tok = lexer.next_token();
+        let tok = lexer.next_token()?;
         assert_eq!(tok.kind, TokenKind::EOF);
         assert_eq!(tok.val, String::from("\0"));
         assert_eq!(tok.loc, SourceLocation::new(1, 1));
+        Ok(())
     }
 
     #[test]
-    fn leading_whitespace() {
+    fn leading_whitespace() -> Result<(), LexicalError> {
         let src = String::from("  \n\n");
         let mut lexer = Lexer::new(&src);
 
-        let tok = lexer.next_token();
+        let tok = lexer.next_token()?;
         assert_eq!(tok.kind, TokenKind::EOF);
         assert_eq!(tok.val, String::from("\0"));
         assert_eq!(tok.loc, SourceLocation::new(3, 1));
+        Ok(())
     }
 
     #[test]
-    fn trailing_whitespace() {
+    fn trailing_whitespace() -> Result<(), LexicalError> {
         let src = String::from(";\n\n  ");
         let mut lexer = Lexer::new(&src);
 
-        lexer.next_token();
-        let tok = lexer.next_token();
+        lexer.next_token()?;
+        let tok = lexer.next_token()?;
         assert_eq!(tok.kind, TokenKind::EOF);
         assert_eq!(tok.val, String::from("\0"));
         assert_eq!(tok.loc, SourceLocation::new(3, 3));
+        Ok(())
     }
 
     #[test]
-    fn leading_and_trailing_whitespace() {
+    fn leading_and_trailing_whitespace() -> Result<(), LexicalError> {
         let src = String::from("  \n\n  \n  ");
         let mut lexer = Lexer::new(&src);
 
-        let tok = lexer.next_token();
+        let tok = lexer.next_token()?;
         assert_eq!(tok.kind, TokenKind::EOF);
         assert_eq!(tok.val, String::from("\0"));
         assert_eq!(tok.loc, SourceLocation::new(4, 3));
+        Ok(())
     }
 
     #[test]
-    fn keywords() {
+    fn keywords() -> Result<(), LexicalError> {
         let src = String::from("func include for");
         let mut lexer = Lexer::new(&src);
         let expected_toks = vec![
@@ -176,11 +211,24 @@ mod tests {
         ];
 
         for expected in expected_toks {
-            let tok = lexer.next_token();
+            let tok = lexer.next_token()?;
             assert_eq!(tok.kind, expected.kind);
             assert_eq!(tok.val, expected.val);
             assert_eq!(tok.loc, expected.loc);
         }
+        Ok(())
+    }
+
+    #[test]
+    fn unterminated_string_literal() {
+        // Lexer will encounter EOF before a closing double-quote
+        let src = String::from("\"Hello, world!");
+        let mut lexer = Lexer::new(&src);
+        let result = lexer.next_token();
+        let expected = LexicalError::syntax_err("Unterminated string literal.");
+
+        assert!(result.is_err());
+        assert_eq!(result.err().unwrap(), expected);
     }
 
 

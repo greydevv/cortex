@@ -40,6 +40,7 @@ impl fmt::Display for Token {
 pub enum TokenKind {
     Num,
     Id,
+    String,
     Scolon,
     Op(OpKind),
     EOF,
