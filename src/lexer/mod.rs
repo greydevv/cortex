@@ -1,7 +1,7 @@
 use std::iter::Peekable;
 
 use crate::io::file::SourceLocation;
-use crate::io::error::LexicalError;
+use crate::io::error::CortexError;
 use crate::lexer::token::{ Token, TokenKind, OpKind, KwdKind };
 
 pub mod token;
@@ -9,7 +9,7 @@ pub mod token;
 pub struct Lexer<'a> {
     c: char,
     loc: SourceLocation,
-    chars: Peekable<std::str::Chars<'a>>
+    chars: Peekable<std::str::Chars<'a>>,
 }
 
 impl<'a> Lexer<'_> {
@@ -42,7 +42,7 @@ impl<'a> Lexer<'_> {
         }
     }
 
-    pub fn next_token(&mut self) -> Result<Token, LexicalError> {
+    pub fn next_token(&mut self) -> Result<Token, CortexError> {
         self.skip_junk();
         if self.eof() {
             return Ok(Token::eof(self.loc));
@@ -78,7 +78,7 @@ impl<'a> Lexer<'_> {
         Token::new(TokenKind::Num, val, loc)
     }
 
-    fn lex_other(&mut self) -> Result<Token, LexicalError> {
+    fn lex_other(&mut self) -> Result<Token, CortexError> {
         let loc = self.loc;
         let (kind, val) = match self.c {
             ';' => (TokenKind::Scolon, String::from(";")),
@@ -90,7 +90,7 @@ impl<'a> Lexer<'_> {
         Ok(Token::new(kind, val, loc))
     }
 
-    fn lex_string(&mut self) -> Result<Token, LexicalError> {
+    fn lex_string(&mut self) -> Result<Token, CortexError> {
         let mut value = String::new();
         // TODO: when computing length of token for future implementation of SourceLocation, need
         // to make sure that the quotes are included in final token length.
@@ -102,7 +102,7 @@ impl<'a> Lexer<'_> {
         loop {
             match self.c {
                 '\0' => {
-                    return Err(LexicalError::syntax_err("Unterminated string literal."));
+                    return Err(CortexError::syntax_err("unterminated string literal"));
                 },
                 '"' => {
                     // eat closing quote
@@ -151,7 +151,7 @@ mod tests {
     use super::*;
 
     #[test]
-    fn empty_file() -> Result<(), LexicalError> {
+    fn empty_file() -> Result<(), CortexError> {
         let src = String::new();
         let mut lexer = Lexer::new(&src);
 
@@ -163,7 +163,7 @@ mod tests {
     }
 
     #[test]
-    fn leading_whitespace() -> Result<(), LexicalError> {
+    fn leading_whitespace() -> Result<(), CortexError> {
         let src = String::from("  \n\n");
         let mut lexer = Lexer::new(&src);
 
@@ -175,7 +175,7 @@ mod tests {
     }
 
     #[test]
-    fn trailing_whitespace() -> Result<(), LexicalError> {
+    fn trailing_whitespace() -> Result<(), CortexError> {
         let src = String::from(";\n\n  ");
         let mut lexer = Lexer::new(&src);
 
@@ -188,7 +188,7 @@ mod tests {
     }
 
     #[test]
-    fn leading_and_trailing_whitespace() -> Result<(), LexicalError> {
+    fn leading_and_trailing_whitespace() -> Result<(), CortexError> {
         let src = String::from("  \n\n  \n  ");
         let mut lexer = Lexer::new(&src);
 
@@ -200,7 +200,7 @@ mod tests {
     }
 
     #[test]
-    fn keywords() -> Result<(), LexicalError> {
+    fn keywords() -> Result<(), CortexError> {
         let src = String::from("func include for");
         let mut lexer = Lexer::new(&src);
         let expected_toks = vec![
@@ -225,7 +225,7 @@ mod tests {
         let src = String::from("\"Hello, world!");
         let mut lexer = Lexer::new(&src);
         let result = lexer.next_token();
-        let expected = LexicalError::syntax_err("Unterminated string literal.");
+        let expected = CortexError::syntax_err("unterminated string literal");
 
         assert!(result.is_err());
         assert_eq!(result.err().unwrap(), expected);
