@@ -42,6 +42,8 @@ pub enum TokenKind {
     Id,
     String,
     Scolon,
+    Oparen,
+    Cparen,
     Op(OpKind),
     EOF,
     Kwd(KwdKind),

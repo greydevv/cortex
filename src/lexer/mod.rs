@@ -9,6 +9,7 @@ pub mod token;
 pub struct Lexer<'a> {
     c: char,
     loc: SourceLocation,
+    paren_stack: Vec<SourceLocation>,
     chars: Peekable<std::str::Chars<'a>>,
 }
 
@@ -21,6 +22,7 @@ impl<'a> Lexer<'_> {
         };
         Lexer {
             c,
+            paren_stack: Vec::new(),
             loc: SourceLocation::default(),
             chars,
         }
@@ -45,6 +47,9 @@ impl<'a> Lexer<'_> {
     pub fn next_token(&mut self) -> Result<Token, CortexError> {
         self.skip_junk();
         if self.eof() {
+            if self.paren_stack.len() > 0 {
+                return Err(CortexError::syntax_err("unmatched opening parenthesis"))
+            }
             return Ok(Token::eof(self.loc));
         } else if self.c.is_alphabetic() {
             return Ok(self.lex_alpha());
@@ -83,6 +88,17 @@ impl<'a> Lexer<'_> {
         let (kind, val) = match self.c {
             ';' => (TokenKind::Scolon, String::from(";")),
             '+' => (TokenKind::Op(OpKind::Plus), String::from("+")),
+            '(' => {
+                self.paren_stack.push(loc);
+                (TokenKind::Oparen, String::from("("))
+            },
+            ')' => {
+                if self.paren_stack.is_empty() {
+                    return Err(CortexError::syntax_err("unmatched closing parenthesis"));
+                }
+                self.paren_stack.pop();
+                (TokenKind::Cparen, String::from(")"))
+            },
             '"' => return self.lex_string(),
             _ => (TokenKind::Unknown, self.c.to_string()),
         };
