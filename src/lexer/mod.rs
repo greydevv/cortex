@@ -9,7 +9,7 @@ pub mod token;
 pub struct Lexer<'a> {
     c: char,
     loc: SourceLocation,
-    paren_stack: Vec<SourceLocation>,
+    paren_stack: Vec<Token>,
     chars: Peekable<std::str::Chars<'a>>,
 }
 
@@ -29,32 +29,37 @@ impl<'a> Lexer<'_> {
     }
 
     fn next_char(&mut self) {
+        if self.c == '\0' {
+            return;
+        }
+        match self.c {
+            '\0' => (),
+            '\n' => {
+                self.loc.line += 1;
+                self.loc.col = 1;
+            },
+            _ => self.loc.col += 1,
+        }
         self.c = match self.chars.next() {
             Some(c) => c,
             None => '\0',
         };
 
-        match self.c {
-            '\n' => {
-                self.loc.line += 1;
-                self.loc.col = 1;
-            },
-            '\0' => (),
-            _ => self.loc.col += 1,
-        }
     }
 
     pub fn next_token(&mut self) -> Result<Token, CortexError> {
         self.skip_junk();
         if self.eof() {
-            if self.paren_stack.len() > 0 {
-                return Err(CortexError::syntax_err("unmatched opening parenthesis"))
+            match self.paren_stack.last() {
+                Some(unmatched_tok) => Err(CortexError::SyntaxError(format!("unmatched opening '{}' at {}", unmatched_tok.val, unmatched_tok.loc))),
+                None => Ok(Token::eof(self.loc))
             }
-            return Ok(Token::eof(self.loc));
         } else if self.c.is_alphabetic() {
             return Ok(self.lex_alpha());
         } else if self.c.is_numeric() {
             return Ok(self.lex_num());
+        } else if self.c == '"' {
+            return self.lex_string();
         } else {
             return self.lex_other();
         }
@@ -88,22 +93,37 @@ impl<'a> Lexer<'_> {
         let (kind, val) = match self.c {
             ';' => (TokenKind::Scolon, String::from(";")),
             '+' => (TokenKind::Op(OpKind::Plus), String::from("+")),
-            '(' => {
-                self.paren_stack.push(loc);
-                (TokenKind::Oparen, String::from("("))
-            },
-            ')' => {
-                if self.paren_stack.is_empty() {
-                    return Err(CortexError::syntax_err("unmatched closing parenthesis"));
-                }
-                self.paren_stack.pop();
-                (TokenKind::Cparen, String::from(")"))
-            },
-            '"' => return self.lex_string(),
+            '(' => (TokenKind::Oparen, String::from("(")),
+            ')' => (TokenKind::Cparen, String::from(")")),
+            '{' => (TokenKind::Obrace, String::from("{")),
+            '}' => (TokenKind::Cbrace, String::from("}")),
+            '[' => (TokenKind::Obrace, String::from("[")),
+            ']' => (TokenKind::Cbrace, String::from("]")),
             _ => (TokenKind::Unknown, self.c.to_string()),
         };
+        // TODO: will need to loop this from 0..val.len() for multi-char tokens
         self.next_char();
-        Ok(Token::new(kind, val, loc))
+        let tok = Token::new(kind, val, loc);
+        // TODO: is there a better way to do this other than cloning? Maybe only call this for
+        // parenthesis, brace, and bracket tokens?
+        self.update_balancing_state(tok.clone())?;
+        Ok(tok)
+    }
+
+    fn update_balancing_state(&mut self, tok: Token) -> Result<(), CortexError> {
+        match tok.kind {
+            TokenKind::Oparen | TokenKind::Obrace | TokenKind::Obrack => self.paren_stack.push(tok),
+            TokenKind::Cparen | TokenKind::Cbrace | TokenKind::Cbrack => 
+                match self.paren_stack.last() {
+                    Some(opening_tok) if tok.closes(opening_tok) => {
+                        self.paren_stack.pop();
+                        return Ok(());
+                    },
+                    _ => return Err(CortexError::SyntaxError(format!("unmatched closing '{}' at {}", tok.val, tok.loc)))
+                }
+            _ => ()
+        }
+        Ok(())
     }
 
     fn lex_string(&mut self) -> Result<Token, CortexError> {

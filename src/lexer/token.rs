@@ -2,6 +2,7 @@ use std::fmt;
 
 use crate::io::file::SourceLocation;
 
+#[derive(Clone)]
 pub struct Token {
     pub kind: TokenKind,
     pub val: String,
@@ -24,6 +25,15 @@ impl Token {
             loc,
         }
     }
+
+    pub fn closes(&self, other: &Token) -> bool {
+        match self.kind {
+            TokenKind::Cparen => other.kind == TokenKind::Oparen,
+            TokenKind::Cbrace => other.kind == TokenKind::Obrace,
+            TokenKind::Cbrack => other.kind == TokenKind::Obrack,
+            _ => false,
+        }
+    }
 }
 
 impl fmt::Display for Token {
@@ -36,7 +46,7 @@ impl fmt::Display for Token {
     }
 }
 
-#[derive(PartialEq, Debug, strum_macros::Display)]
+#[derive(PartialEq, Debug, Clone, strum_macros::Display)]
 pub enum TokenKind {
     Num,
     Id,
@@ -44,18 +54,23 @@ pub enum TokenKind {
     Scolon,
     Oparen,
     Cparen,
+    Obrace,
+    Cbrace,
+    Obrack,
+    Cbrack,
     Op(OpKind),
     EOF,
     Kwd(KwdKind),
     Unknown,
 }
 
-#[derive(PartialEq, Debug)]
+
+#[derive(PartialEq, Debug, Clone)]
 pub enum OpKind {
     Plus,
 }
 
-#[derive(PartialEq, Debug)]
+#[derive(PartialEq, Debug, Clone)]
 pub enum KwdKind {
     Func,
     Include,
