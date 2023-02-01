@@ -97,8 +97,8 @@ impl<'a> Lexer<'_> {
             ')' => (TokenKind::Cparen, String::from(")")),
             '{' => (TokenKind::Obrace, String::from("{")),
             '}' => (TokenKind::Cbrace, String::from("}")),
-            '[' => (TokenKind::Obrace, String::from("[")),
-            ']' => (TokenKind::Cbrace, String::from("]")),
+            '[' => (TokenKind::Obrack, String::from("[")),
+            ']' => (TokenKind::Cbrack, String::from("]")),
             _ => (TokenKind::Unknown, self.c.to_string()),
         };
         // TODO: will need to loop this from 0..val.len() for multi-char tokens
@@ -115,9 +115,15 @@ impl<'a> Lexer<'_> {
             TokenKind::Oparen | TokenKind::Obrace | TokenKind::Obrack => self.paren_stack.push(tok),
             TokenKind::Cparen | TokenKind::Cbrace | TokenKind::Cbrack => 
                 match self.paren_stack.last() {
-                    Some(opening_tok) if tok.closes(opening_tok) => {
-                        self.paren_stack.pop();
-                        return Ok(());
+                    Some(opening_tok) => {
+                        if tok.closes(opening_tok) {
+                            println!("{} closes {}", tok.kind, opening_tok.kind);
+                            self.paren_stack.pop();
+                            return Ok(());
+                        } else {
+                            println!("{} does not close {}", tok.kind, opening_tok.kind);
+                            return Err(CortexError::SyntaxError(format!("unmatched closing '{}' at {}", tok.val, tok.loc)));
+                        }
                     },
                     _ => return Err(CortexError::SyntaxError(format!("unmatched closing '{}' at {}", tok.val, tok.loc)))
                 }
@@ -243,7 +249,7 @@ mod tests {
             Token::new(TokenKind::Kwd(KwdKind::Func), String::from("func"), SourceLocation::new(1, 1)),
             Token::new(TokenKind::Kwd(KwdKind::Include), String::from("include"), SourceLocation::new(1, 6)),
             Token::new(TokenKind::Kwd(KwdKind::For), String::from("for"), SourceLocation::new(1, 14)),
-            Token::new(TokenKind::EOF, String::from("\0"), SourceLocation::new(1, 16)),
+            Token::new(TokenKind::EOF, String::from("\0"), SourceLocation::new(1, 17)),
         ];
 
         for expected in expected_toks {
@@ -267,5 +273,56 @@ mod tests {
         assert_eq!(result.err().unwrap(), expected);
     }
 
+    #[test]
+    fn closed_brackets() -> Result<(), CortexError> {
+        let src = String::from("([\n\n\n()]) [] {\n{{[{}]}\n}\n}");
+        let expected_toks = vec![
+            Token::new(TokenKind::Oparen, String::from("("), SourceLocation::new(1, 1)),
+            Token::new(TokenKind::Obrack, String::from("["), SourceLocation::new(1, 2)),
+            Token::new(TokenKind::Oparen, String::from("("), SourceLocation::new(4, 1)),
+            Token::new(TokenKind::Cparen, String::from(")"), SourceLocation::new(4, 2)),
+            Token::new(TokenKind::Cbrack, String::from("]"), SourceLocation::new(4, 3)),
+            Token::new(TokenKind::Cparen, String::from(")"), SourceLocation::new(4, 4)),
+            Token::new(TokenKind::Obrack, String::from("["), SourceLocation::new(4, 6)),
+            Token::new(TokenKind::Cbrack, String::from("]"), SourceLocation::new(4, 7)),
+            Token::new(TokenKind::Obrace, String::from("{"), SourceLocation::new(4, 9)),
+            Token::new(TokenKind::Obrace, String::from("{"), SourceLocation::new(5, 1)),
+            Token::new(TokenKind::Obrace, String::from("{"), SourceLocation::new(5, 2)),
+            Token::new(TokenKind::Obrack, String::from("["), SourceLocation::new(5, 3)),
+            Token::new(TokenKind::Obrace, String::from("{"), SourceLocation::new(5, 4)),
+            Token::new(TokenKind::Cbrace, String::from("}"), SourceLocation::new(5, 5)),
+            Token::new(TokenKind::Cbrack, String::from("]"), SourceLocation::new(5, 6)),
+            Token::new(TokenKind::Cbrace, String::from("}"), SourceLocation::new(5, 7)),
+            Token::new(TokenKind::Cbrace, String::from("}"), SourceLocation::new(6, 1)),
+            Token::new(TokenKind::Cbrace, String::from("}"), SourceLocation::new(7, 1)),
+            Token::eof(SourceLocation::new(7,2)),
+        ];
+        let mut lexer = Lexer::new(&src);
 
+        for expected in expected_toks {
+            let tok = lexer.next_token()?;
+            assert_eq!(tok.kind, expected.kind);
+            assert_eq!(tok.val, expected.val);
+            assert_eq!(tok.loc, expected.loc);
+        }
+        Ok(())
+    }
+
+    #[test]
+    fn unclosed_brackets() {
+        let src = String::from("(\n{)");
+        let mut lexer = Lexer::new(&src);
+
+        for _ in 0..2 {
+            assert!(lexer.next_token().is_ok());
+        }
+
+        // TODO: This is expected functionality for now, but might need to be changed for better
+        // user-experience. Should the error be thrown for the brace or the parenthesis?
+        let expected = CortexError::syntax_err("unmatched closing ')' at (line 2, col 2)");
+        let result = lexer.next_token();
+
+        assert!(result.is_err());
+        assert_eq!(result.err().unwrap(), expected);
+    }
 }
