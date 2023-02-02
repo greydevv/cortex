@@ -27,11 +27,13 @@ impl Token {
     }
 
     pub fn closes(&self, other: &Token) -> bool {
-        match self.kind {
-            TokenKind::Cparen => other.kind == TokenKind::Oparen,
-            TokenKind::Cbrace => other.kind == TokenKind::Obrace,
-            TokenKind::Cbrack => other.kind == TokenKind::Obrack,
-            _ => false,
+        match &self.kind {
+            TokenKind::Brack(brack_kind, brack_state) if *brack_state == BracketState::Closed =>
+                match &other.kind {
+                    TokenKind::Brack(other_brack_kind, _) => *brack_kind == *other_brack_kind,
+                    _ => false,
+                },
+            _ => false
         }
     }
 }
@@ -52,18 +54,25 @@ pub enum TokenKind {
     Id,
     String,
     Scolon,
-    Oparen,
-    Cparen,
-    Obrace,
-    Cbrace,
-    Obrack,
-    Cbrack,
+    Brack(BracketKind, BracketState),
     Op(OpKind),
     EOF,
     Kwd(KwdKind),
     Unknown,
 }
 
+#[derive(PartialEq, Debug, Clone)]
+pub enum BracketKind {
+    Paren,
+    Brace,
+    Square,
+}
+
+#[derive(PartialEq, Debug, Clone)]
+pub enum BracketState {
+    Open,
+    Closed,
+}
 
 #[derive(PartialEq, Debug, Clone)]
 pub enum OpKind {
@@ -84,6 +93,52 @@ impl KwdKind {
             "include" => Some(KwdKind::Include),
             "for" => Some(KwdKind::For),
             _ => None,
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn closes() {
+        let compat_toks = vec![
+            (
+                Token::new(TokenKind::Brack(BracketKind::Paren, BracketState::Open), String::from("("), SourceLocation::default()),
+                Token::new(TokenKind::Brack(BracketKind::Paren, BracketState::Closed), String::from(")"), SourceLocation::default()),
+            ),
+            (
+                Token::new(TokenKind::Brack(BracketKind::Brace, BracketState::Open), String::from("{"), SourceLocation::default()),
+                Token::new(TokenKind::Brack(BracketKind::Brace, BracketState::Closed), String::from("}"), SourceLocation::default()),
+            ),
+            (
+                Token::new(TokenKind::Brack(BracketKind::Square, BracketState::Open), String::from("["), SourceLocation::default()),
+                Token::new(TokenKind::Brack(BracketKind::Square, BracketState::Closed), String::from("]"), SourceLocation::default()),
+            ),
+        ];
+
+        for (open_tok, close_tok) in compat_toks {
+            assert!(close_tok.closes(&open_tok));
+        }
+
+        let incompat_toks = vec![
+            (
+                Token::new(TokenKind::Brack(BracketKind::Paren, BracketState::Open), String::from("("), SourceLocation::default()),
+                Token::new(TokenKind::Brack(BracketKind::Paren, BracketState::Open), String::from("("), SourceLocation::default()),
+            ),
+            (
+                Token::new(TokenKind::Brack(BracketKind::Brace, BracketState::Open), String::from("{"), SourceLocation::default()),
+                Token::new(TokenKind::Brack(BracketKind::Paren, BracketState::Closed), String::from(")"), SourceLocation::default()),
+            ),
+            (
+                Token::new(TokenKind::Brack(BracketKind::Square, BracketState::Open), String::from("["), SourceLocation::default()),
+                Token::new(TokenKind::Brack(BracketKind::Brace, BracketState::Closed), String::from("}"), SourceLocation::default()),
+            ),
+        ];
+
+        for (open_tok, close_tok) in incompat_toks {
+            assert!(!close_tok.closes(&open_tok));
         }
     }
 }
