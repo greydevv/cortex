@@ -21,12 +21,12 @@ impl CortexError {
         CortexError::FileIOError(String::from(msg))
     }
 
-    pub fn unclosed_bracket(tok: &Token) -> CortexError {
+    pub fn unclosed_brace(tok: &Token) -> CortexError {
         let msg = format!("unclosed '{}'", tok.val);
         CortexError::SyntaxError(msg)
     }
 
-    pub fn unopened_bracket(tok: &Token) -> CortexError {
+    pub fn unopened_brace(tok: &Token) -> CortexError {
         let msg = format!("unopened '{}'", tok.val);
         CortexError::SyntaxError(msg)
     }

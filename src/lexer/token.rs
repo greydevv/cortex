@@ -28,9 +28,9 @@ impl Token {
 
     pub fn closes(&self, other: &Token) -> bool {
         match &self.kind {
-            TokenKind::Brack(brack_kind, brack_state) if *brack_state == BracketFace::Closed =>
+            TokenKind::Brace(brace_kind, brace_face) if *brace_face == BraceFace::Closed =>
                 match &other.kind {
-                    TokenKind::Brack(other_brack_kind, _) => *brack_kind == *other_brack_kind,
+                    TokenKind::Brace(other_brace_kind, _) => *brace_kind == *other_brace_kind,
                     _ => false,
                 },
             _ => false
@@ -54,7 +54,7 @@ pub enum TokenKind {
     Id,
     String,
     Scolon,
-    Brack(BracketKind, BracketFace),
+    Brace(BraceKind, BraceFace),
     Op(OpKind),
     EOF,
     Kwd(KwdKind),
@@ -62,14 +62,14 @@ pub enum TokenKind {
 }
 
 #[derive(PartialEq, Debug, Clone)]
-pub enum BracketKind {
+pub enum BraceKind {
     Paren,
     Brace,
     Square,
 }
 
 #[derive(PartialEq, Debug, Clone)]
-pub enum BracketFace {
+pub enum BraceFace {
     Open,
     Closed,
 }
@@ -105,16 +105,16 @@ mod tests {
     fn closes() {
         let compat_toks = vec![
             (
-                Token::new(TokenKind::Brack(BracketKind::Paren, BracketFace::Open), String::from("("), SourceLocation::default()),
-                Token::new(TokenKind::Brack(BracketKind::Paren, BracketFace::Closed), String::from(")"), SourceLocation::default()),
+                Token::new(TokenKind::Brace(BraceKind::Paren, BraceFace::Open), String::from("("), SourceLocation::default()),
+                Token::new(TokenKind::Brace(BraceKind::Paren, BraceFace::Closed), String::from(")"), SourceLocation::default()),
             ),
             (
-                Token::new(TokenKind::Brack(BracketKind::Brace, BracketFace::Open), String::from("{"), SourceLocation::default()),
-                Token::new(TokenKind::Brack(BracketKind::Brace, BracketFace::Closed), String::from("}"), SourceLocation::default()),
+                Token::new(TokenKind::Brace(BraceKind::Brace, BraceFace::Open), String::from("{"), SourceLocation::default()),
+                Token::new(TokenKind::Brace(BraceKind::Brace, BraceFace::Closed), String::from("}"), SourceLocation::default()),
             ),
             (
-                Token::new(TokenKind::Brack(BracketKind::Square, BracketFace::Open), String::from("["), SourceLocation::default()),
-                Token::new(TokenKind::Brack(BracketKind::Square, BracketFace::Closed), String::from("]"), SourceLocation::default()),
+                Token::new(TokenKind::Brace(BraceKind::Square, BraceFace::Open), String::from("["), SourceLocation::default()),
+                Token::new(TokenKind::Brace(BraceKind::Square, BraceFace::Closed), String::from("]"), SourceLocation::default()),
             ),
         ];
 
@@ -124,16 +124,16 @@ mod tests {
 
         let incompat_toks = vec![
             (
-                Token::new(TokenKind::Brack(BracketKind::Paren, BracketFace::Open), String::from("("), SourceLocation::default()),
-                Token::new(TokenKind::Brack(BracketKind::Paren, BracketFace::Open), String::from("("), SourceLocation::default()),
+                Token::new(TokenKind::Brace(BraceKind::Paren, BraceFace::Open), String::from("("), SourceLocation::default()),
+                Token::new(TokenKind::Brace(BraceKind::Paren, BraceFace::Open), String::from("("), SourceLocation::default()),
             ),
             (
-                Token::new(TokenKind::Brack(BracketKind::Brace, BracketFace::Open), String::from("{"), SourceLocation::default()),
-                Token::new(TokenKind::Brack(BracketKind::Paren, BracketFace::Closed), String::from(")"), SourceLocation::default()),
+                Token::new(TokenKind::Brace(BraceKind::Brace, BraceFace::Open), String::from("{"), SourceLocation::default()),
+                Token::new(TokenKind::Brace(BraceKind::Paren, BraceFace::Closed), String::from(")"), SourceLocation::default()),
             ),
             (
-                Token::new(TokenKind::Brack(BracketKind::Square, BracketFace::Open), String::from("["), SourceLocation::default()),
-                Token::new(TokenKind::Brack(BracketKind::Brace, BracketFace::Closed), String::from("}"), SourceLocation::default()),
+                Token::new(TokenKind::Brace(BraceKind::Square, BraceFace::Open), String::from("["), SourceLocation::default()),
+                Token::new(TokenKind::Brace(BraceKind::Brace, BraceFace::Closed), String::from("}"), SourceLocation::default()),
             ),
         ];
 

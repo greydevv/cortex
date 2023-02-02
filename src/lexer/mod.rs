@@ -2,14 +2,14 @@ use std::iter::Peekable;
 
 use crate::io::file::SourceLocation;
 use crate::io::error::CortexError;
-use crate::lexer::token::{ Token, TokenKind, BracketKind, BracketFace, OpKind, KwdKind };
+use crate::lexer::token::{ Token, TokenKind, BraceKind, BraceFace, OpKind, KwdKind };
 
 pub mod token;
 
 pub struct Lexer<'a> {
     c: char,
     loc: SourceLocation,
-    bracket_stack: Vec<Token>,
+    brace_stack: Vec<Token>,
     chars: Peekable<std::str::Chars<'a>>,
 }
 
@@ -22,7 +22,7 @@ impl<'a> Lexer<'_> {
         };
         Lexer {
             c,
-            bracket_stack: Vec::new(),
+            brace_stack: Vec::new(),
             loc: SourceLocation::default(),
             chars,
         }
@@ -50,10 +50,10 @@ impl<'a> Lexer<'_> {
     pub fn next_token(&mut self) -> Result<Token, CortexError> {
         self.skip_junk();
         if self.eof() {
-            // bracket balancing state (bracket_stack) should be empty if all opened brackets were
+            // brace balancing state (brace_stack) should be empty if all opened braces were
             // closed at some point
-            match self.bracket_stack.last() {
-                Some(unclosed_brack) => Err(CortexError::unclosed_bracket(&unclosed_brack)),
+            match self.brace_stack.last() {
+                Some(unclosed_brace) => Err(CortexError::unclosed_brace(&unclosed_brace)),
                 None => Ok(Token::eof(self.loc))
             }
         } else if self.c.is_alphabetic() {
@@ -95,12 +95,12 @@ impl<'a> Lexer<'_> {
         let (kind, val) = match self.c {
             ';' => (TokenKind::Scolon, String::from(";")),
             '+' => (TokenKind::Op(OpKind::Plus), String::from("+")),
-            '(' => (TokenKind::Brack(BracketKind::Paren, BracketFace::Open), String::from("(")),
-            ')' => (TokenKind::Brack(BracketKind::Paren, BracketFace::Closed), String::from(")")),
-            '{' => (TokenKind::Brack(BracketKind::Brace, BracketFace::Open), String::from("{")),
-            '}' => (TokenKind::Brack(BracketKind::Brace, BracketFace::Closed), String::from("}")),
-            '[' => (TokenKind::Brack(BracketKind::Square, BracketFace::Open), String::from("[")),
-            ']' => (TokenKind::Brack(BracketKind::Square, BracketFace::Closed), String::from("]")),
+            '(' => (TokenKind::Brace(BraceKind::Paren, BraceFace::Open), String::from("(")),
+            ')' => (TokenKind::Brace(BraceKind::Paren, BraceFace::Closed), String::from(")")),
+            '{' => (TokenKind::Brace(BraceKind::Brace, BraceFace::Open), String::from("{")),
+            '}' => (TokenKind::Brace(BraceKind::Brace, BraceFace::Closed), String::from("}")),
+            '[' => (TokenKind::Brace(BraceKind::Square, BraceFace::Open), String::from("[")),
+            ']' => (TokenKind::Brace(BraceKind::Square, BraceFace::Closed), String::from("]")),
             _ => (TokenKind::Unknown, self.c.to_string()),
         };
         // TODO: will need to loop this from 0..val.len() for multi-char tokens
@@ -108,7 +108,7 @@ impl<'a> Lexer<'_> {
         let tok = Token::new(kind, val, loc);
 
         match tok.kind {
-            TokenKind::Brack(_, _) => self.update_balancing_state(tok.clone())?,
+            TokenKind::Brace(_, _) => self.update_balancing_state(tok.clone())?,
             _ => ()
         }
 
@@ -117,29 +117,29 @@ impl<'a> Lexer<'_> {
 
     fn update_balancing_state(&mut self, tok: Token) -> Result<(), CortexError> {
         match &tok.kind {
-            TokenKind::Brack(_, brack_state) =>
-                match brack_state {
-                    BracketFace::Open => self.bracket_stack.push(tok),
-                    BracketFace::Closed => {
-                        let top_tok = match self.bracket_stack.pop() {
-                            // proceed normally if the current closing bracket matches an opening bracket
-                            // on top of stack
+            TokenKind::Brace(_, brace_face) =>
+                match brace_face {
+                    BraceFace::Open => self.brace_stack.push(tok),
+                    BraceFace::Closed => {
+                        let top_tok = match self.brace_stack.pop() {
+                            // proceed normally if the current closing brace matches an opening
+                            // brace on top of stack
                             Some(opening_tok) if tok.closes(&opening_tok) => return Ok(()),
                             Some(opening_tok) => opening_tok,
-                            // stack is empty, the current closing bracket is unopened
-                            None => return Err(CortexError::unopened_bracket(&tok)),
+                            // stack is empty, the current closing brace is unopened
+                            None => return Err(CortexError::unopened_brace(&tok)),
                         };
-                        // unwind the balancing state (bracket_stack) to see if the current closing token
+                        // unwind the balancing state (brace_stack) to see if the current closing token
                         // was opened somewhere previously
-                        while let Some(opening_tok) = self.bracket_stack.pop() {
+                        while let Some(opening_tok) = self.brace_stack.pop() {
                             // found a matching opening token, the token on the top of the stack was
                             // unclosed
                             if tok.closes(&opening_tok) {
-                                return Err(CortexError::unclosed_bracket(&top_tok));
+                                return Err(CortexError::unclosed_brace(&top_tok));
                             }
                         }
                         // did not find a matching opening token, the current closing token is unopened
-                        return Err(CortexError::unopened_bracket(&tok));
+                        return Err(CortexError::unopened_brace(&tok));
                     },
                 },
             _ => ()
@@ -289,27 +289,27 @@ mod tests {
     }
 
     #[test]
-    fn closed_brackets() -> Result<(), CortexError> {
+    fn closed_braces() -> Result<(), CortexError> {
         let src = String::from("([\n\n\n()]) [] {\n{{[{}]}\n}\n}");
         let expected_toks = vec![
-            Token::new(TokenKind::Brack(BracketKind::Paren, BracketFace::Open), String::from("("), SourceLocation::new(1, 1)),
-            Token::new(TokenKind::Brack(BracketKind::Square, BracketFace::Open), String::from("["), SourceLocation::new(1, 2)),
-            Token::new(TokenKind::Brack(BracketKind::Paren, BracketFace::Open), String::from("("), SourceLocation::new(4, 1)),
-            Token::new(TokenKind::Brack(BracketKind::Paren, BracketFace::Closed), String::from(")"), SourceLocation::new(4, 2)),
-            Token::new(TokenKind::Brack(BracketKind::Square, BracketFace::Closed), String::from("]"), SourceLocation::new(4, 3)),
-            Token::new(TokenKind::Brack(BracketKind::Paren, BracketFace::Closed), String::from(")"), SourceLocation::new(4, 4)),
-            Token::new(TokenKind::Brack(BracketKind::Square, BracketFace::Open), String::from("["), SourceLocation::new(4, 6)),
-            Token::new(TokenKind::Brack(BracketKind::Square, BracketFace::Closed), String::from("]"), SourceLocation::new(4, 7)),
-            Token::new(TokenKind::Brack(BracketKind::Brace, BracketFace::Open), String::from("{"), SourceLocation::new(4, 9)),
-            Token::new(TokenKind::Brack(BracketKind::Brace, BracketFace::Open), String::from("{"), SourceLocation::new(5, 1)),
-            Token::new(TokenKind::Brack(BracketKind::Brace, BracketFace::Open), String::from("{"), SourceLocation::new(5, 2)),
-            Token::new(TokenKind::Brack(BracketKind::Square, BracketFace::Open), String::from("["), SourceLocation::new(5, 3)),
-            Token::new(TokenKind::Brack(BracketKind::Brace, BracketFace::Open), String::from("{"), SourceLocation::new(5, 4)),
-            Token::new(TokenKind::Brack(BracketKind::Brace, BracketFace::Closed), String::from("}"), SourceLocation::new(5, 5)),
-            Token::new(TokenKind::Brack(BracketKind::Square, BracketFace::Closed), String::from("]"), SourceLocation::new(5, 6)),
-            Token::new(TokenKind::Brack(BracketKind::Brace, BracketFace::Closed), String::from("}"), SourceLocation::new(5, 7)),
-            Token::new(TokenKind::Brack(BracketKind::Brace, BracketFace::Closed), String::from("}"), SourceLocation::new(6, 1)),
-            Token::new(TokenKind::Brack(BracketKind::Brace, BracketFace::Closed), String::from("}"), SourceLocation::new(7, 1)),
+            Token::new(TokenKind::Brace(BraceKind::Paren, BraceFace::Open), String::from("("), SourceLocation::new(1, 1)),
+            Token::new(TokenKind::Brace(BraceKind::Square, BraceFace::Open), String::from("["), SourceLocation::new(1, 2)),
+            Token::new(TokenKind::Brace(BraceKind::Paren, BraceFace::Open), String::from("("), SourceLocation::new(4, 1)),
+            Token::new(TokenKind::Brace(BraceKind::Paren, BraceFace::Closed), String::from(")"), SourceLocation::new(4, 2)),
+            Token::new(TokenKind::Brace(BraceKind::Square, BraceFace::Closed), String::from("]"), SourceLocation::new(4, 3)),
+            Token::new(TokenKind::Brace(BraceKind::Paren, BraceFace::Closed), String::from(")"), SourceLocation::new(4, 4)),
+            Token::new(TokenKind::Brace(BraceKind::Square, BraceFace::Open), String::from("["), SourceLocation::new(4, 6)),
+            Token::new(TokenKind::Brace(BraceKind::Square, BraceFace::Closed), String::from("]"), SourceLocation::new(4, 7)),
+            Token::new(TokenKind::Brace(BraceKind::Brace, BraceFace::Open), String::from("{"), SourceLocation::new(4, 9)),
+            Token::new(TokenKind::Brace(BraceKind::Brace, BraceFace::Open), String::from("{"), SourceLocation::new(5, 1)),
+            Token::new(TokenKind::Brace(BraceKind::Brace, BraceFace::Open), String::from("{"), SourceLocation::new(5, 2)),
+            Token::new(TokenKind::Brace(BraceKind::Square, BraceFace::Open), String::from("["), SourceLocation::new(5, 3)),
+            Token::new(TokenKind::Brace(BraceKind::Brace, BraceFace::Open), String::from("{"), SourceLocation::new(5, 4)),
+            Token::new(TokenKind::Brace(BraceKind::Brace, BraceFace::Closed), String::from("}"), SourceLocation::new(5, 5)),
+            Token::new(TokenKind::Brace(BraceKind::Square, BraceFace::Closed), String::from("]"), SourceLocation::new(5, 6)),
+            Token::new(TokenKind::Brace(BraceKind::Brace, BraceFace::Closed), String::from("}"), SourceLocation::new(5, 7)),
+            Token::new(TokenKind::Brace(BraceKind::Brace, BraceFace::Closed), String::from("}"), SourceLocation::new(6, 1)),
+            Token::new(TokenKind::Brace(BraceKind::Brace, BraceFace::Closed), String::from("}"), SourceLocation::new(7, 1)),
             Token::eof(SourceLocation::new(7,2)),
         ];
         let mut lexer = Lexer::new(&src);
@@ -324,7 +324,7 @@ mod tests {
     }
 
     #[test]
-    fn unclosed_brackets() {
+    fn unclosed_brace() {
         let src = String::from("(\n{)");
         let mut lexer = Lexer::new(&src);
 
@@ -340,7 +340,7 @@ mod tests {
     }
 
     #[test]
-    fn unopened_brackets() {
+    fn unopened_brace() {
         let src = String::from("(\n})");
         let mut lexer = Lexer::new(&src);
 
