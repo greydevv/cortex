@@ -2,7 +2,7 @@ use std::iter::Peekable;
 
 use crate::io::file::SourceLocation;
 use crate::io::error::CortexError;
-use crate::lexer::token::{ Token, TokenKind, BracketKind, BracketState, OpKind, KwdKind };
+use crate::lexer::token::{ Token, TokenKind, BracketKind, BracketFace, OpKind, KwdKind };
 
 pub mod token;
 
@@ -95,12 +95,12 @@ impl<'a> Lexer<'_> {
         let (kind, val) = match self.c {
             ';' => (TokenKind::Scolon, String::from(";")),
             '+' => (TokenKind::Op(OpKind::Plus), String::from("+")),
-            '(' => (TokenKind::Brack(BracketKind::Paren, BracketState::Open), String::from("(")),
-            ')' => (TokenKind::Brack(BracketKind::Paren, BracketState::Closed), String::from(")")),
-            '{' => (TokenKind::Brack(BracketKind::Brace, BracketState::Open), String::from("{")),
-            '}' => (TokenKind::Brack(BracketKind::Brace, BracketState::Closed), String::from("}")),
-            '[' => (TokenKind::Brack(BracketKind::Square, BracketState::Open), String::from("[")),
-            ']' => (TokenKind::Brack(BracketKind::Square, BracketState::Closed), String::from("]")),
+            '(' => (TokenKind::Brack(BracketKind::Paren, BracketFace::Open), String::from("(")),
+            ')' => (TokenKind::Brack(BracketKind::Paren, BracketFace::Closed), String::from(")")),
+            '{' => (TokenKind::Brack(BracketKind::Brace, BracketFace::Open), String::from("{")),
+            '}' => (TokenKind::Brack(BracketKind::Brace, BracketFace::Closed), String::from("}")),
+            '[' => (TokenKind::Brack(BracketKind::Square, BracketFace::Open), String::from("[")),
+            ']' => (TokenKind::Brack(BracketKind::Square, BracketFace::Closed), String::from("]")),
             _ => (TokenKind::Unknown, self.c.to_string()),
         };
         // TODO: will need to loop this from 0..val.len() for multi-char tokens
@@ -119,8 +119,8 @@ impl<'a> Lexer<'_> {
         match &tok.kind {
             TokenKind::Brack(_, brack_state) =>
                 match brack_state {
-                    BracketState::Open => self.bracket_stack.push(tok),
-                    BracketState::Closed => {
+                    BracketFace::Open => self.bracket_stack.push(tok),
+                    BracketFace::Closed => {
                         let top_tok = match self.bracket_stack.pop() {
                             // proceed normally if the current closing bracket matches an opening bracket
                             // on top of stack
@@ -292,24 +292,24 @@ mod tests {
     fn closed_brackets() -> Result<(), CortexError> {
         let src = String::from("([\n\n\n()]) [] {\n{{[{}]}\n}\n}");
         let expected_toks = vec![
-            Token::new(TokenKind::Brack(BracketKind::Paren, BracketState::Open), String::from("("), SourceLocation::new(1, 1)),
-            Token::new(TokenKind::Brack(BracketKind::Square, BracketState::Open), String::from("["), SourceLocation::new(1, 2)),
-            Token::new(TokenKind::Brack(BracketKind::Paren, BracketState::Open), String::from("("), SourceLocation::new(4, 1)),
-            Token::new(TokenKind::Brack(BracketKind::Paren, BracketState::Closed), String::from(")"), SourceLocation::new(4, 2)),
-            Token::new(TokenKind::Brack(BracketKind::Square, BracketState::Closed), String::from("]"), SourceLocation::new(4, 3)),
-            Token::new(TokenKind::Brack(BracketKind::Paren, BracketState::Closed), String::from(")"), SourceLocation::new(4, 4)),
-            Token::new(TokenKind::Brack(BracketKind::Square, BracketState::Open), String::from("["), SourceLocation::new(4, 6)),
-            Token::new(TokenKind::Brack(BracketKind::Square, BracketState::Closed), String::from("]"), SourceLocation::new(4, 7)),
-            Token::new(TokenKind::Brack(BracketKind::Brace, BracketState::Open), String::from("{"), SourceLocation::new(4, 9)),
-            Token::new(TokenKind::Brack(BracketKind::Brace, BracketState::Open), String::from("{"), SourceLocation::new(5, 1)),
-            Token::new(TokenKind::Brack(BracketKind::Brace, BracketState::Open), String::from("{"), SourceLocation::new(5, 2)),
-            Token::new(TokenKind::Brack(BracketKind::Square, BracketState::Open), String::from("["), SourceLocation::new(5, 3)),
-            Token::new(TokenKind::Brack(BracketKind::Brace, BracketState::Open), String::from("{"), SourceLocation::new(5, 4)),
-            Token::new(TokenKind::Brack(BracketKind::Brace, BracketState::Closed), String::from("}"), SourceLocation::new(5, 5)),
-            Token::new(TokenKind::Brack(BracketKind::Square, BracketState::Closed), String::from("]"), SourceLocation::new(5, 6)),
-            Token::new(TokenKind::Brack(BracketKind::Brace, BracketState::Closed), String::from("}"), SourceLocation::new(5, 7)),
-            Token::new(TokenKind::Brack(BracketKind::Brace, BracketState::Closed), String::from("}"), SourceLocation::new(6, 1)),
-            Token::new(TokenKind::Brack(BracketKind::Brace, BracketState::Closed), String::from("}"), SourceLocation::new(7, 1)),
+            Token::new(TokenKind::Brack(BracketKind::Paren, BracketFace::Open), String::from("("), SourceLocation::new(1, 1)),
+            Token::new(TokenKind::Brack(BracketKind::Square, BracketFace::Open), String::from("["), SourceLocation::new(1, 2)),
+            Token::new(TokenKind::Brack(BracketKind::Paren, BracketFace::Open), String::from("("), SourceLocation::new(4, 1)),
+            Token::new(TokenKind::Brack(BracketKind::Paren, BracketFace::Closed), String::from(")"), SourceLocation::new(4, 2)),
+            Token::new(TokenKind::Brack(BracketKind::Square, BracketFace::Closed), String::from("]"), SourceLocation::new(4, 3)),
+            Token::new(TokenKind::Brack(BracketKind::Paren, BracketFace::Closed), String::from(")"), SourceLocation::new(4, 4)),
+            Token::new(TokenKind::Brack(BracketKind::Square, BracketFace::Open), String::from("["), SourceLocation::new(4, 6)),
+            Token::new(TokenKind::Brack(BracketKind::Square, BracketFace::Closed), String::from("]"), SourceLocation::new(4, 7)),
+            Token::new(TokenKind::Brack(BracketKind::Brace, BracketFace::Open), String::from("{"), SourceLocation::new(4, 9)),
+            Token::new(TokenKind::Brack(BracketKind::Brace, BracketFace::Open), String::from("{"), SourceLocation::new(5, 1)),
+            Token::new(TokenKind::Brack(BracketKind::Brace, BracketFace::Open), String::from("{"), SourceLocation::new(5, 2)),
+            Token::new(TokenKind::Brack(BracketKind::Square, BracketFace::Open), String::from("["), SourceLocation::new(5, 3)),
+            Token::new(TokenKind::Brack(BracketKind::Brace, BracketFace::Open), String::from("{"), SourceLocation::new(5, 4)),
+            Token::new(TokenKind::Brack(BracketKind::Brace, BracketFace::Closed), String::from("}"), SourceLocation::new(5, 5)),
+            Token::new(TokenKind::Brack(BracketKind::Square, BracketFace::Closed), String::from("]"), SourceLocation::new(5, 6)),
+            Token::new(TokenKind::Brack(BracketKind::Brace, BracketFace::Closed), String::from("}"), SourceLocation::new(5, 7)),
+            Token::new(TokenKind::Brack(BracketKind::Brace, BracketFace::Closed), String::from("}"), SourceLocation::new(6, 1)),
+            Token::new(TokenKind::Brack(BracketKind::Brace, BracketFace::Closed), String::from("}"), SourceLocation::new(7, 1)),
             Token::eof(SourceLocation::new(7,2)),
         ];
         let mut lexer = Lexer::new(&src);
