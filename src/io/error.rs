@@ -4,6 +4,8 @@ use std::convert::From;
 
 use colored::Colorize;
 
+use crate::lexer::token::Token;
+
 #[derive(Debug, Clone, PartialEq)]
 pub enum CortexError {
     SyntaxError(String),
@@ -17,6 +19,16 @@ impl CortexError {
 
     pub fn file_io_err(msg: &str) -> CortexError {
         CortexError::FileIOError(String::from(msg))
+    }
+
+    pub fn unclosed_bracket(tok: &Token) -> CortexError {
+        let msg = format!("unclosed '{}'", tok.val);
+        CortexError::SyntaxError(msg)
+    }
+
+    pub fn unopened_bracket(tok: &Token) -> CortexError {
+        let msg = format!("unopened '{}'", tok.val);
+        CortexError::SyntaxError(msg)
     }
 }
 

@@ -53,7 +53,7 @@ impl<'a> Lexer<'_> {
             // bracket balancing state (bracket_stack) should be empty if all opened brackets were
             // closed at some point
             match self.bracket_stack.last() {
-                Some(unmatched_tok) => Err(CortexError::SyntaxError(format!("unclosed '{}'", unmatched_tok.val))),
+                Some(unclosed_brack) => Err(CortexError::unclosed_bracket(&unclosed_brack)),
                 None => Ok(Token::eof(self.loc))
             }
         } else if self.c.is_alphabetic() {
@@ -127,7 +127,7 @@ impl<'a> Lexer<'_> {
                             Some(opening_tok) if tok.closes(&opening_tok) => return Ok(()),
                             Some(opening_tok) => opening_tok,
                             // stack is empty, the current closing bracket is unopened
-                            None => return Err(CortexError::SyntaxError(format!("unopened '{}'", tok.val)))
+                            None => return Err(CortexError::unopened_bracket(&tok)),
                         };
                         // unwind the balancing state (bracket_stack) to see if the current closing token
                         // was opened somewhere previously
@@ -135,11 +135,11 @@ impl<'a> Lexer<'_> {
                             // found a matching opening token, the token on the top of the stack was
                             // unclosed
                             if tok.closes(&opening_tok) {
-                                return Err(CortexError::SyntaxError(format!("unclosed '{}'", top_tok.val)))
+                                return Err(CortexError::unclosed_bracket(&top_tok));
                             }
                         }
                         // did not find a matching opening token, the current closing token is unopened
-                        return Err(CortexError::SyntaxError(format!("unopened '{}'", tok.val)));
+                        return Err(CortexError::unopened_bracket(&tok));
                     },
                 },
             _ => ()
