@@ -9,7 +9,7 @@ pub mod token;
 pub struct Lexer<'a> {
     c: char,
     loc: SourceLocation,
-    paren_stack: Vec<Token>,
+    bracket_stack: Vec<Token>,
     chars: Peekable<std::str::Chars<'a>>,
 }
 
@@ -22,7 +22,7 @@ impl<'a> Lexer<'_> {
         };
         Lexer {
             c,
-            paren_stack: Vec::new(),
+            bracket_stack: Vec::new(),
             loc: SourceLocation::default(),
             chars,
         }
@@ -50,8 +50,8 @@ impl<'a> Lexer<'_> {
     pub fn next_token(&mut self) -> Result<Token, CortexError> {
         self.skip_junk();
         if self.eof() {
-            match self.paren_stack.last() {
-                Some(unmatched_tok) => Err(CortexError::SyntaxError(format!("unmatched opening '{}' at {}", unmatched_tok.val, unmatched_tok.loc))),
+            match self.bracket_stack.last() {
+                Some(unmatched_tok) => Err(CortexError::SyntaxError(format!("unclosed '{}'", unmatched_tok.val))),
                 None => Ok(Token::eof(self.loc))
             }
         } else if self.c.is_alphabetic() {
@@ -112,21 +112,20 @@ impl<'a> Lexer<'_> {
 
     fn update_balancing_state(&mut self, tok: Token) -> Result<(), CortexError> {
         match tok.kind {
-            TokenKind::Oparen | TokenKind::Obrace | TokenKind::Obrack => self.paren_stack.push(tok),
-            TokenKind::Cparen | TokenKind::Cbrace | TokenKind::Cbrack => 
-                match self.paren_stack.last() {
-                    Some(opening_tok) => {
-                        if tok.closes(opening_tok) {
-                            println!("{} closes {}", tok.kind, opening_tok.kind);
-                            self.paren_stack.pop();
-                            return Ok(());
-                        } else {
-                            println!("{} does not close {}", tok.kind, opening_tok.kind);
-                            return Err(CortexError::SyntaxError(format!("unmatched closing '{}' at {}", tok.val, tok.loc)));
-                        }
-                    },
-                    _ => return Err(CortexError::SyntaxError(format!("unmatched closing '{}' at {}", tok.val, tok.loc)))
+            TokenKind::Oparen | TokenKind::Obrace | TokenKind::Obrack => self.bracket_stack.push(tok),
+            TokenKind::Cparen | TokenKind::Cbrace | TokenKind::Cbrack => {
+                let top_tok = match self.bracket_stack.pop() {
+                    Some(opening_tok) if tok.closes(&opening_tok) => return Ok(()),
+                    Some(opening_tok) => opening_tok,
+                    None => return Err(CortexError::SyntaxError(format!("unopened '{}'", tok.val)))
+                };
+                while let Some(opening_tok) = self.bracket_stack.pop() {
+                    if tok.closes(&opening_tok) {
+                        return Err(CortexError::SyntaxError(format!("unclosed '{}'", top_tok.val)))
+                    }
                 }
+                return Err(CortexError::SyntaxError(format!("unopened '{}'", tok.val)));
+            },
             _ => ()
         }
         Ok(())
@@ -317,9 +316,22 @@ mod tests {
             assert!(lexer.next_token().is_ok());
         }
 
-        // TODO: This is expected functionality for now, but might need to be changed for better
-        // user-experience. Should the error be thrown for the brace or the parenthesis?
-        let expected = CortexError::syntax_err("unmatched closing ')' at (line 2, col 2)");
+        let expected = CortexError::syntax_err("unclosed '{'");
+        let result = lexer.next_token();
+
+        assert!(result.is_err());
+        assert_eq!(result.err().unwrap(), expected);
+    }
+
+    #[test]
+    fn unopened_brackets() {
+        let src = String::from("(\n})");
+        let mut lexer = Lexer::new(&src);
+
+        // no need to loop, first next_token is only call that should succeed
+        assert!(lexer.next_token().is_ok());
+
+        let expected = CortexError::syntax_err("unopened '}'");
         let result = lexer.next_token();
 
         assert!(result.is_err());
