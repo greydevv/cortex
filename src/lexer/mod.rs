@@ -50,6 +50,8 @@ impl<'a> Lexer<'_> {
     pub fn next_token(&mut self) -> Result<Token, CortexError> {
         self.skip_junk();
         if self.eof() {
+            // bracket balancing state (bracket_stack) should be empty if all opened brackets were
+            // closed at some point
             match self.bracket_stack.last() {
                 Some(unmatched_tok) => Err(CortexError::SyntaxError(format!("unclosed '{}'", unmatched_tok.val))),
                 None => Ok(Token::eof(self.loc))
@@ -115,15 +117,23 @@ impl<'a> Lexer<'_> {
             TokenKind::Oparen | TokenKind::Obrace | TokenKind::Obrack => self.bracket_stack.push(tok),
             TokenKind::Cparen | TokenKind::Cbrace | TokenKind::Cbrack => {
                 let top_tok = match self.bracket_stack.pop() {
+                    // proceed normally if the current closing bracket matches an opening bracket
+                    // on top of stack
                     Some(opening_tok) if tok.closes(&opening_tok) => return Ok(()),
                     Some(opening_tok) => opening_tok,
+                    // stack is empty, the current closing bracket is unopened
                     None => return Err(CortexError::SyntaxError(format!("unopened '{}'", tok.val)))
                 };
+                // unwind the balancing state (bracket_stack) to see if the current closing token
+                // was opened somewhere previously
                 while let Some(opening_tok) = self.bracket_stack.pop() {
+                    // found a matching opening token, the token on the top of the stack was
+                    // unclosed
                     if tok.closes(&opening_tok) {
                         return Err(CortexError::SyntaxError(format!("unclosed '{}'", top_tok.val)))
                     }
                 }
+                // did not find a matching opening token, the current closing token is unopened
                 return Err(CortexError::SyntaxError(format!("unopened '{}'", tok.val)));
             },
             _ => ()
