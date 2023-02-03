@@ -70,7 +70,7 @@ impl<'a> Lexer<'_> {
     fn lex_alpha(&mut self) -> Token {
         let mut val = String::new();
         let loc = self.loc;
-        while self.c.is_alphanumeric() {
+        while self.c.is_alphanumeric() || self.c == '_' {
             val.push(self.c);
             self.next_char();
         }
