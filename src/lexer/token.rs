@@ -64,7 +64,7 @@ pub enum TokenKind {
 #[derive(PartialEq, Debug, Clone)]
 pub enum BraceKind {
     Paren,
-    Brace,
+    Curly,
     Square,
 }
 
@@ -109,8 +109,8 @@ mod tests {
                 Token::new(TokenKind::Brace(BraceKind::Paren, BraceFace::Closed), String::from(")"), SourceLocation::default()),
             ),
             (
-                Token::new(TokenKind::Brace(BraceKind::Brace, BraceFace::Open), String::from("{"), SourceLocation::default()),
-                Token::new(TokenKind::Brace(BraceKind::Brace, BraceFace::Closed), String::from("}"), SourceLocation::default()),
+                Token::new(TokenKind::Brace(BraceKind::Curly, BraceFace::Open), String::from("{"), SourceLocation::default()),
+                Token::new(TokenKind::Brace(BraceKind::Curly, BraceFace::Closed), String::from("}"), SourceLocation::default()),
             ),
             (
                 Token::new(TokenKind::Brace(BraceKind::Square, BraceFace::Open), String::from("["), SourceLocation::default()),
@@ -128,12 +128,12 @@ mod tests {
                 Token::new(TokenKind::Brace(BraceKind::Paren, BraceFace::Open), String::from("("), SourceLocation::default()),
             ),
             (
-                Token::new(TokenKind::Brace(BraceKind::Brace, BraceFace::Open), String::from("{"), SourceLocation::default()),
+                Token::new(TokenKind::Brace(BraceKind::Curly, BraceFace::Open), String::from("{"), SourceLocation::default()),
                 Token::new(TokenKind::Brace(BraceKind::Paren, BraceFace::Closed), String::from(")"), SourceLocation::default()),
             ),
             (
                 Token::new(TokenKind::Brace(BraceKind::Square, BraceFace::Open), String::from("["), SourceLocation::default()),
-                Token::new(TokenKind::Brace(BraceKind::Brace, BraceFace::Closed), String::from("}"), SourceLocation::default()),
+                Token::new(TokenKind::Brace(BraceKind::Curly, BraceFace::Closed), String::from("}"), SourceLocation::default()),
             ),
         ];
 
