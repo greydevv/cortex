@@ -53,12 +53,20 @@ pub enum TokenKind {
     Num,
     Id,
     String,
-    Scolon,
+    Delim(DelimKind),
     Brace(BraceKind, BraceFace),
     Op(OpKind),
     EOF,
     Kwd(KwdKind),
     Unknown,
+}
+
+#[derive(PartialEq, Debug, Clone)]
+pub enum DelimKind {
+    Period,
+    Comma,
+    Scolon,
+    Colon,
 }
 
 #[derive(PartialEq, Debug, Clone)]

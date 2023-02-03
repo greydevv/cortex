@@ -2,7 +2,7 @@ use std::iter::Peekable;
 
 use crate::io::file::SourceLocation;
 use crate::io::error::CortexError;
-use crate::lexer::token::{ Token, TokenKind, BraceKind, BraceFace, OpKind, KwdKind };
+use crate::lexer::token::{ Token, TokenKind, DelimKind, BraceKind, BraceFace, OpKind, KwdKind };
 
 pub mod token;
 
@@ -93,7 +93,10 @@ impl<'a> Lexer<'_> {
     fn lex_other(&mut self) -> Result<Token, CortexError> {
         let loc = self.loc;
         let (kind, val) = match self.c {
-            ';' => (TokenKind::Scolon, String::from(";")),
+            '.' => (TokenKind::Delim(DelimKind::Period), String::from(".")),
+            ',' => (TokenKind::Delim(DelimKind::Comma), String::from(",")),
+            ';' => (TokenKind::Delim(DelimKind::Scolon), String::from(";")),
+            ':' => (TokenKind::Delim(DelimKind::Colon), String::from(":")),
             '+' => (TokenKind::Op(OpKind::Plus), String::from("+")),
             '(' => (TokenKind::Brace(BraceKind::Paren, BraceFace::Open), String::from("(")),
             ')' => (TokenKind::Brace(BraceKind::Paren, BraceFace::Closed), String::from(")")),
