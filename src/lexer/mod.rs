@@ -106,15 +106,15 @@ impl<'a> Lexer<'_> {
             ']' => (TokenKind::Brace(BraceKind::Square, BraceFace::Closed), String::from("]")),
             _ => (TokenKind::Unknown, self.c.to_string()),
         };
-        // TODO: will need to loop this from 0..val.len() for multi-char tokens
-        self.next_char();
-        let tok = Token::new(kind, val, loc);
+        for _ in 0..val.len() {
+            self.next_char();
+        }
 
+        let tok = Token::new(kind, val, loc);
         match tok.kind {
             TokenKind::Brace(_, _) => self.update_balancing_state(tok.clone())?,
             _ => ()
         }
-
         Ok(tok)
     }
 
