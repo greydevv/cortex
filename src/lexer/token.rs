@@ -84,7 +84,10 @@ pub enum BraceFace {
 
 #[derive(PartialEq, Debug, Clone)]
 pub enum OpKind {
-    Plus,
+    Add,
+    Sub,
+    Mul,
+    Div,
 }
 
 #[derive(PartialEq, Debug, Clone)]
