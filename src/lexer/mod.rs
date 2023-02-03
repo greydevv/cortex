@@ -87,8 +87,37 @@ impl<'a> Lexer<'_> {
         }
     }
 
+    /// Returns a Token containing data representing a numeric literal.
+    ///
+    /// It is worth noting that the Parser is responsible for understanding the following two
+    /// expressions are semantically valid and equivalent:
+    ///
+    /// ```
+    /// 5 + -3
+    /// 5 -3
+    /// ```
+    ///
+    /// The Lexer yields three tokens (Num, Op, Num) for the first expression and only two (Num,
+    /// Num) for the second equation. In the case of the second expression, the Parser must expand
+    /// the negative numeric literal into a subtraction operation followed by a positive numeric
+    /// literal, like so:
+    ///
+    /// ```
+    /// 5 -3 // (5) - (3)
+    /// ```
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// "13"  // Token(TokenKind::Num, "13", ...)
+    ///
+    /// "-13" // Token(TokenKind::Num, "-13", ...)
+    /// ```
     fn lex_num(&mut self) -> Token {
-        let mut val = String::new();
+        // initializing with current char before the loop allows a negative sign to appear before a
+        // numeric literal
+        let mut val = String::from(self.c);
+        self.next_char();
         let loc = self.loc;
         while self.c.is_numeric() {
             val.push(self.c);
@@ -108,6 +137,7 @@ impl<'a> Lexer<'_> {
             '-' => 
                 match self.peek_char() {
                     '>' => (TokenKind::Arrow, String::from("->")),
+                    c if c.is_numeric() => return Ok(self.lex_num()),
                     _ => (TokenKind::Op(OpKind::Sub), String::from("-")),
                 },
             '*' => (TokenKind::Op(OpKind::Mul), String::from("*")),
