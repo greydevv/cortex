@@ -53,11 +53,12 @@ pub enum TokenKind {
     Num,
     Id,
     String,
+    Arrow,
     Delim(DelimKind),
     Brace(BraceKind, BraceFace),
     Op(OpKind),
-    EOF,
     Kwd(KwdKind),
+    EOF,
     Unknown,
 }
 

@@ -47,6 +47,13 @@ impl<'a> Lexer<'_> {
 
     }
 
+    fn peek_char(&mut self) -> char {
+        match self.chars.peek() {
+            Some(c) => *c,
+            None => '\0',
+        }
+    }
+
     pub fn next_token(&mut self) -> Result<Token, CortexError> {
         self.skip_junk();
         if self.eof() {
@@ -98,7 +105,11 @@ impl<'a> Lexer<'_> {
             ';' => (TokenKind::Delim(DelimKind::Scolon), String::from(";")),
             ':' => (TokenKind::Delim(DelimKind::Colon), String::from(":")),
             '+' => (TokenKind::Op(OpKind::Add), String::from("+")),
-            '-' => (TokenKind::Op(OpKind::Sub), String::from("-")),
+            '-' => 
+                match self.peek_char() {
+                    '>' => (TokenKind::Arrow, String::from("->")),
+                    _ => (TokenKind::Op(OpKind::Sub), String::from("-")),
+                },
             '*' => (TokenKind::Op(OpKind::Mul), String::from("*")),
             '/' => (TokenKind::Op(OpKind::Div), String::from("/")),
             '(' => (TokenKind::Brace(BraceKind::Paren, BraceFace::Open), String::from("(")),
