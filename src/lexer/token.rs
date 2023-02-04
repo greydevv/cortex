@@ -83,7 +83,7 @@ pub enum BraceFace {
     Closed,
 }
 
-#[derive(PartialEq, Debug, Clone)]
+#[derive(PartialEq, Debug, Clone, strum_macros::Display)]
 pub enum OpKind {
     Add,
     Sub,
