@@ -5,15 +5,13 @@ use crate::io::file::SourceLocation;
 #[derive(Clone)]
 pub struct Token {
     pub kind: TokenKind,
-    pub val: String,
     pub loc: SourceLocation,
 }
 
 impl Token {
-    pub fn new(kind: TokenKind, val: String, loc: SourceLocation) -> Token {
+    pub fn new(kind: TokenKind, loc: SourceLocation) -> Token {
         Token {
             kind,
-            val,
             loc,
         }
     }
@@ -21,7 +19,6 @@ impl Token {
     pub fn eof(loc: SourceLocation) -> Token {
         Token {
             kind: TokenKind::EOF,
-            val: String::from("\0"),
             loc,
         }
     }
@@ -40,26 +37,22 @@ impl Token {
 
 impl fmt::Display for Token {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        if self.kind == TokenKind::EOF {
-            write!(f, "{} {{ {} }}", self.kind, self.loc)
-        } else {
-            write!(f, "{} {{ {} {} }}", self.kind, self.val, self.loc)
-        }
+        write!(f, "{} {{ {} {} }}", self.kind, self.kind.literal(), self.loc)
     }
 }
 
 #[derive(PartialEq, Debug, Clone, strum_macros::Display)]
 pub enum TokenKind {
-    Num,
-    Id,
-    String,
+    Num(i32),
+    Id(String),
+    String(String),
     Arrow,
     Delim(DelimKind),
     Brace(BraceKind, BraceFace),
     Op(OpKind),
     Kwd(KwdKind),
     EOF,
-    Unknown,
+    Unknown(char),
 }
 
 #[derive(PartialEq, Debug, Clone)]
@@ -81,6 +74,16 @@ pub enum BraceKind {
 pub enum BraceFace {
     Open,
     Closed,
+}
+
+impl BraceFace {
+    pub fn is_closed(&self) -> bool {
+        *self == BraceFace::Closed
+    } 
+
+    pub fn is_open(&self) -> bool {
+        *self == BraceFace::Open
+    }
 }
 
 #[derive(PartialEq, Debug, Clone, strum_macros::Display)]
@@ -109,6 +112,80 @@ impl KwdKind {
     }
 }
 
+pub trait Literal {
+    fn literal(&self) -> String;
+
+    fn len(&self) -> usize {
+        self.literal().len()
+    }
+}
+
+impl Literal for TokenKind {
+    fn literal(&self) -> String {
+        match &self {
+            TokenKind::Num(n) => n.to_string(),
+            TokenKind::Id(s) => s.clone(),
+            TokenKind::String(s) => s.clone(),
+            TokenKind::Arrow => String::from("->"),
+            TokenKind::Delim(delim_kind) => delim_kind.literal(),
+            TokenKind::Brace(brace_kind, brace_face) => 
+                match brace_kind {
+                    BraceKind::Paren =>
+                        match brace_face {
+                            BraceFace::Open => String::from("("),
+                            BraceFace::Closed => String::from(")"),
+                        },
+                    BraceKind::Curly =>
+                        match brace_face {
+                            BraceFace::Open => String::from("{"),
+                            BraceFace::Closed => String::from("}"),
+                        },
+                    BraceKind::Square =>
+                        match brace_face {
+                            BraceFace::Open => String::from("["),
+                            BraceFace::Closed => String::from("]"),
+                        },
+                },
+            TokenKind::Op(op_kind) => op_kind.literal(),
+            TokenKind::Kwd(kwd_kind) => kwd_kind.literal(),
+            TokenKind::EOF => String::from("\\0"),
+            TokenKind::Unknown(c) => c.to_string(),
+        }
+    }
+}
+
+impl Literal for DelimKind {
+    fn literal(&self) -> String {
+        match &self {
+            DelimKind::Period => String::from("."),
+            DelimKind::Comma => String::from(","),
+            DelimKind::Scolon => String::from(";"),
+            DelimKind::Colon => String::from(":"),
+        }
+    }
+}
+
+impl Literal for OpKind {
+    fn literal(&self) -> String {
+        match &self {
+            OpKind::Add => String::from("+"),
+            OpKind::Sub => String::from("-"),
+            OpKind::Mul => String::from("*"),
+            OpKind::Div => String::from("/"),
+        }
+    }
+}
+
+impl Literal for KwdKind {
+    fn literal(&self) -> String {
+        match &self {
+            KwdKind::For => String::from("for"),
+            KwdKind::Func => String::from("func"),
+            KwdKind::Include => String::from("include"),
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -117,16 +194,16 @@ mod tests {
     fn closes() {
         let compat_toks = vec![
             (
-                Token::new(TokenKind::Brace(BraceKind::Paren, BraceFace::Open), String::from("("), SourceLocation::default()),
-                Token::new(TokenKind::Brace(BraceKind::Paren, BraceFace::Closed), String::from(")"), SourceLocation::default()),
+                Token::new(TokenKind::Brace(BraceKind::Paren, BraceFace::Open), SourceLocation::default()),
+                Token::new(TokenKind::Brace(BraceKind::Paren, BraceFace::Closed), SourceLocation::default()),
             ),
             (
-                Token::new(TokenKind::Brace(BraceKind::Curly, BraceFace::Open), String::from("{"), SourceLocation::default()),
-                Token::new(TokenKind::Brace(BraceKind::Curly, BraceFace::Closed), String::from("}"), SourceLocation::default()),
+                Token::new(TokenKind::Brace(BraceKind::Curly, BraceFace::Open), SourceLocation::default()),
+                Token::new(TokenKind::Brace(BraceKind::Curly, BraceFace::Closed), SourceLocation::default()),
             ),
             (
-                Token::new(TokenKind::Brace(BraceKind::Square, BraceFace::Open), String::from("["), SourceLocation::default()),
-                Token::new(TokenKind::Brace(BraceKind::Square, BraceFace::Closed), String::from("]"), SourceLocation::default()),
+                Token::new(TokenKind::Brace(BraceKind::Square, BraceFace::Open), SourceLocation::default()),
+                Token::new(TokenKind::Brace(BraceKind::Square, BraceFace::Closed), SourceLocation::default()),
             ),
         ];
 
@@ -136,16 +213,16 @@ mod tests {
 
         let incompat_toks = vec![
             (
-                Token::new(TokenKind::Brace(BraceKind::Paren, BraceFace::Open), String::from("("), SourceLocation::default()),
-                Token::new(TokenKind::Brace(BraceKind::Paren, BraceFace::Open), String::from("("), SourceLocation::default()),
+                Token::new(TokenKind::Brace(BraceKind::Paren, BraceFace::Open), SourceLocation::default()),
+                Token::new(TokenKind::Brace(BraceKind::Paren, BraceFace::Open), SourceLocation::default()),
             ),
             (
-                Token::new(TokenKind::Brace(BraceKind::Curly, BraceFace::Open), String::from("{"), SourceLocation::default()),
-                Token::new(TokenKind::Brace(BraceKind::Paren, BraceFace::Closed), String::from(")"), SourceLocation::default()),
+                Token::new(TokenKind::Brace(BraceKind::Curly, BraceFace::Open), SourceLocation::default()),
+                Token::new(TokenKind::Brace(BraceKind::Paren, BraceFace::Closed), SourceLocation::default()),
             ),
             (
-                Token::new(TokenKind::Brace(BraceKind::Square, BraceFace::Open), String::from("["), SourceLocation::default()),
-                Token::new(TokenKind::Brace(BraceKind::Curly, BraceFace::Closed), String::from("}"), SourceLocation::default()),
+                Token::new(TokenKind::Brace(BraceKind::Square, BraceFace::Open), SourceLocation::default()),
+                Token::new(TokenKind::Brace(BraceKind::Curly, BraceFace::Closed), SourceLocation::default()),
             ),
         ];
 

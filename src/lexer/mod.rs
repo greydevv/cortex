@@ -2,7 +2,7 @@ use std::iter::Peekable;
 
 use crate::io::file::SourceLocation;
 use crate::io::error::CortexError;
-use crate::lexer::token::{ Token, TokenKind, DelimKind, BraceKind, BraceFace, OpKind, KwdKind };
+use crate::lexer::token::{ Token, TokenKind, DelimKind, BraceKind, BraceFace, OpKind, KwdKind, Literal };
 
 pub mod token;
 
@@ -66,7 +66,7 @@ impl<'a> Lexer<'_> {
         } else if self.c.is_alphabetic() {
             Ok(self.lex_alpha())
         } else if self.c.is_numeric() {
-            Ok(self.lex_num())
+            self.lex_num()
         } else if self.c == '"' {
             self.lex_string()
         } else {
@@ -81,9 +81,12 @@ impl<'a> Lexer<'_> {
             val.push(self.c);
             self.next_char();
         }
-        match KwdKind::from_string(&val) {
-            Some(kind) => Token::new(TokenKind::Kwd(kind), val, loc),
-            None => Token::new(TokenKind::Id, val, loc),
+
+        // return a keyword token if the string was found to be a built-in keyword
+        if let Some(kwd_kind) = KwdKind::from_string(&val) {
+            return Token::new(TokenKind::Kwd(kwd_kind), loc);
+        } else {
+            return Token::new(TokenKind::Id(val), loc);
         }
     }
 
@@ -113,48 +116,51 @@ impl<'a> Lexer<'_> {
     ///
     /// "-13" // Token(TokenKind::Num, "-13", ...)
     /// ```
-    fn lex_num(&mut self) -> Token {
+    fn lex_num(&mut self) -> Result<Token, CortexError> {
         // initializing with current char before the loop allows a negative sign to appear before a
         // numeric literal
         let mut val = String::from(self.c);
         self.next_char();
         let loc = self.loc;
-        while self.c.is_numeric() {
+        while self.c.is_alphanumeric() {
             val.push(self.c);
             self.next_char();
         }
-        Token::new(TokenKind::Num, val, loc)
+        match val.parse::<i32>() {
+            Ok(n) => Ok(Token::new(TokenKind::Num(n), loc)),
+            Err(_) => Err(CortexError::SyntaxError(format!("'{}' is not a valid integer literal", val)))
+        }
     }
 
     fn lex_other(&mut self) -> Result<Token, CortexError> {
         let loc = self.loc;
-        let (kind, val) = match self.c {
-            '.' => (TokenKind::Delim(DelimKind::Period), String::from(".")),
-            ',' => (TokenKind::Delim(DelimKind::Comma), String::from(",")),
-            ';' => (TokenKind::Delim(DelimKind::Scolon), String::from(";")),
-            ':' => (TokenKind::Delim(DelimKind::Colon), String::from(":")),
-            '+' => (TokenKind::Op(OpKind::Add), String::from("+")),
+        let kind = match self.c {
+            '.' => TokenKind::Delim(DelimKind::Period),
+            ',' => TokenKind::Delim(DelimKind::Comma),
+            ';' => TokenKind::Delim(DelimKind::Scolon),
+            ':' => TokenKind::Delim(DelimKind::Colon),
+            '+' => TokenKind::Op(OpKind::Add),
             '-' => 
                 match self.peek_char() {
-                    '>' => (TokenKind::Arrow, String::from("->")),
-                    c if c.is_numeric() => return Ok(self.lex_num()),
-                    _ => (TokenKind::Op(OpKind::Sub), String::from("-")),
+                    '>' => TokenKind::Arrow,
+                    c if c.is_numeric() => return self.lex_num(),
+                    _ => TokenKind::Op(OpKind::Sub),
                 },
-            '*' => (TokenKind::Op(OpKind::Mul), String::from("*")),
-            '/' => (TokenKind::Op(OpKind::Div), String::from("/")),
-            '(' => (TokenKind::Brace(BraceKind::Paren, BraceFace::Open), String::from("(")),
-            ')' => (TokenKind::Brace(BraceKind::Paren, BraceFace::Closed), String::from(")")),
-            '{' => (TokenKind::Brace(BraceKind::Curly, BraceFace::Open), String::from("{")),
-            '}' => (TokenKind::Brace(BraceKind::Curly, BraceFace::Closed), String::from("}")),
-            '[' => (TokenKind::Brace(BraceKind::Square, BraceFace::Open), String::from("[")),
-            ']' => (TokenKind::Brace(BraceKind::Square, BraceFace::Closed), String::from("]")),
-            _ => (TokenKind::Unknown, self.c.to_string()),
+            '*' => TokenKind::Op(OpKind::Mul),
+            '/' => TokenKind::Op(OpKind::Div),
+            '(' => TokenKind::Brace(BraceKind::Paren, BraceFace::Open),
+            ')' => TokenKind::Brace(BraceKind::Paren, BraceFace::Closed),
+            '{' => TokenKind::Brace(BraceKind::Curly, BraceFace::Open),
+            '}' => TokenKind::Brace(BraceKind::Curly, BraceFace::Closed),
+            '[' => TokenKind::Brace(BraceKind::Square, BraceFace::Open),
+            ']' => TokenKind::Brace(BraceKind::Square, BraceFace::Closed),
+            _ => TokenKind::Unknown(self.c),
         };
-        for _ in 0..val.len() {
+        for _ in 0..kind.len() {
             self.next_char();
         }
 
-        let tok = Token::new(kind, val, loc);
+        let tok = Token::new(kind, loc);
         match tok.kind {
             TokenKind::Brace(_, _) => self.update_balancing_state(tok.clone())?,
             _ => ()
@@ -195,7 +201,7 @@ impl<'a> Lexer<'_> {
     }
 
     fn lex_string(&mut self) -> Result<Token, CortexError> {
-        let mut value = String::new();
+        let mut val = String::new();
         // TODO: when computing length of token for future implementation of SourceLocation, need
         // to make sure that the quotes are included in final token length.
         let loc = self.loc.clone();
@@ -212,12 +218,11 @@ impl<'a> Lexer<'_> {
                     // eat closing quote
                     self.next_char();
                     return Ok(Token::new(
-                        TokenKind::String,
-                        value,
+                        TokenKind::String(val),
                         loc,
                     ));
                 },
-                _ => value.push(self.c)
+                _ => val.push(self.c)
             }
             self.next_char();
         }
@@ -261,7 +266,6 @@ mod tests {
 
         let tok = lexer.next_token()?;
         assert_eq!(tok.kind, TokenKind::EOF);
-        assert_eq!(tok.val, String::from("\0"));
         assert_eq!(tok.loc, SourceLocation::new(1, 1));
         Ok(())
     }
@@ -273,7 +277,6 @@ mod tests {
 
         let tok = lexer.next_token()?;
         assert_eq!(tok.kind, TokenKind::EOF);
-        assert_eq!(tok.val, String::from("\0"));
         assert_eq!(tok.loc, SourceLocation::new(3, 1));
         Ok(())
     }
@@ -286,7 +289,6 @@ mod tests {
         lexer.next_token()?;
         let tok = lexer.next_token()?;
         assert_eq!(tok.kind, TokenKind::EOF);
-        assert_eq!(tok.val, String::from("\0"));
         assert_eq!(tok.loc, SourceLocation::new(3, 3));
         Ok(())
     }
@@ -298,7 +300,6 @@ mod tests {
 
         let tok = lexer.next_token()?;
         assert_eq!(tok.kind, TokenKind::EOF);
-        assert_eq!(tok.val, String::from("\0"));
         assert_eq!(tok.loc, SourceLocation::new(4, 3));
         Ok(())
     }
@@ -308,16 +309,15 @@ mod tests {
         let src = String::from("func include for");
         let mut lexer = Lexer::new(&src);
         let expected_toks = vec![
-            Token::new(TokenKind::Kwd(KwdKind::Func), String::from("func"), SourceLocation::new(1, 1)),
-            Token::new(TokenKind::Kwd(KwdKind::Include), String::from("include"), SourceLocation::new(1, 6)),
-            Token::new(TokenKind::Kwd(KwdKind::For), String::from("for"), SourceLocation::new(1, 14)),
-            Token::new(TokenKind::EOF, String::from("\0"), SourceLocation::new(1, 17)),
+            Token::new(TokenKind::Kwd(KwdKind::Func), SourceLocation::new(1, 1)),
+            Token::new(TokenKind::Kwd(KwdKind::Include), SourceLocation::new(1, 6)),
+            Token::new(TokenKind::Kwd(KwdKind::For), SourceLocation::new(1, 14)),
+            Token::new(TokenKind::EOF, SourceLocation::new(1, 17)),
         ];
 
         for expected in expected_toks {
             let tok = lexer.next_token()?;
             assert_eq!(tok.kind, expected.kind);
-            assert_eq!(tok.val, expected.val);
             assert_eq!(tok.loc, expected.loc);
         }
         Ok(())
@@ -339,24 +339,24 @@ mod tests {
     fn closed_braces() -> Result<(), CortexError> {
         let src = String::from("([\n\n\n()]) [] {\n{{[{}]}\n}\n}");
         let expected_toks = vec![
-            Token::new(TokenKind::Brace(BraceKind::Paren, BraceFace::Open), String::from("("), SourceLocation::new(1, 1)),
-            Token::new(TokenKind::Brace(BraceKind::Square, BraceFace::Open), String::from("["), SourceLocation::new(1, 2)),
-            Token::new(TokenKind::Brace(BraceKind::Paren, BraceFace::Open), String::from("("), SourceLocation::new(4, 1)),
-            Token::new(TokenKind::Brace(BraceKind::Paren, BraceFace::Closed), String::from(")"), SourceLocation::new(4, 2)),
-            Token::new(TokenKind::Brace(BraceKind::Square, BraceFace::Closed), String::from("]"), SourceLocation::new(4, 3)),
-            Token::new(TokenKind::Brace(BraceKind::Paren, BraceFace::Closed), String::from(")"), SourceLocation::new(4, 4)),
-            Token::new(TokenKind::Brace(BraceKind::Square, BraceFace::Open), String::from("["), SourceLocation::new(4, 6)),
-            Token::new(TokenKind::Brace(BraceKind::Square, BraceFace::Closed), String::from("]"), SourceLocation::new(4, 7)),
-            Token::new(TokenKind::Brace(BraceKind::Curly, BraceFace::Open), String::from("{"), SourceLocation::new(4, 9)),
-            Token::new(TokenKind::Brace(BraceKind::Curly, BraceFace::Open), String::from("{"), SourceLocation::new(5, 1)),
-            Token::new(TokenKind::Brace(BraceKind::Curly, BraceFace::Open), String::from("{"), SourceLocation::new(5, 2)),
-            Token::new(TokenKind::Brace(BraceKind::Square, BraceFace::Open), String::from("["), SourceLocation::new(5, 3)),
-            Token::new(TokenKind::Brace(BraceKind::Curly, BraceFace::Open), String::from("{"), SourceLocation::new(5, 4)),
-            Token::new(TokenKind::Brace(BraceKind::Curly, BraceFace::Closed), String::from("}"), SourceLocation::new(5, 5)),
-            Token::new(TokenKind::Brace(BraceKind::Square, BraceFace::Closed), String::from("]"), SourceLocation::new(5, 6)),
-            Token::new(TokenKind::Brace(BraceKind::Curly, BraceFace::Closed), String::from("}"), SourceLocation::new(5, 7)),
-            Token::new(TokenKind::Brace(BraceKind::Curly, BraceFace::Closed), String::from("}"), SourceLocation::new(6, 1)),
-            Token::new(TokenKind::Brace(BraceKind::Curly, BraceFace::Closed), String::from("}"), SourceLocation::new(7, 1)),
+            Token::new(TokenKind::Brace(BraceKind::Paren, BraceFace::Open), SourceLocation::new(1, 1)),
+            Token::new(TokenKind::Brace(BraceKind::Square, BraceFace::Open), SourceLocation::new(1, 2)),
+            Token::new(TokenKind::Brace(BraceKind::Paren, BraceFace::Open), SourceLocation::new(4, 1)),
+            Token::new(TokenKind::Brace(BraceKind::Paren, BraceFace::Closed), SourceLocation::new(4, 2)),
+            Token::new(TokenKind::Brace(BraceKind::Square, BraceFace::Closed), SourceLocation::new(4, 3)),
+            Token::new(TokenKind::Brace(BraceKind::Paren, BraceFace::Closed), SourceLocation::new(4, 4)),
+            Token::new(TokenKind::Brace(BraceKind::Square, BraceFace::Open), SourceLocation::new(4, 6)),
+            Token::new(TokenKind::Brace(BraceKind::Square, BraceFace::Closed), SourceLocation::new(4, 7)),
+            Token::new(TokenKind::Brace(BraceKind::Curly, BraceFace::Open), SourceLocation::new(4, 9)),
+            Token::new(TokenKind::Brace(BraceKind::Curly, BraceFace::Open), SourceLocation::new(5, 1)),
+            Token::new(TokenKind::Brace(BraceKind::Curly, BraceFace::Open), SourceLocation::new(5, 2)),
+            Token::new(TokenKind::Brace(BraceKind::Square, BraceFace::Open), SourceLocation::new(5, 3)),
+            Token::new(TokenKind::Brace(BraceKind::Curly, BraceFace::Open), SourceLocation::new(5, 4)),
+            Token::new(TokenKind::Brace(BraceKind::Curly, BraceFace::Closed), SourceLocation::new(5, 5)),
+            Token::new(TokenKind::Brace(BraceKind::Square, BraceFace::Closed), SourceLocation::new(5, 6)),
+            Token::new(TokenKind::Brace(BraceKind::Curly, BraceFace::Closed), SourceLocation::new(5, 7)),
+            Token::new(TokenKind::Brace(BraceKind::Curly, BraceFace::Closed), SourceLocation::new(6, 1)),
+            Token::new(TokenKind::Brace(BraceKind::Curly, BraceFace::Closed), SourceLocation::new(7, 1)),
             Token::eof(SourceLocation::new(7,2)),
         ];
         let mut lexer = Lexer::new(&src);
@@ -364,7 +364,6 @@ mod tests {
         for expected in expected_toks {
             let tok = lexer.next_token()?;
             assert_eq!(tok.kind, expected.kind);
-            assert_eq!(tok.val, expected.val);
             assert_eq!(tok.loc, expected.loc);
         }
         Ok(())

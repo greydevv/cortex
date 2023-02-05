@@ -4,7 +4,7 @@ use std::convert::From;
 
 use colored::Colorize;
 
-use crate::lexer::token::Token;
+use crate::lexer::token::{ Token, Literal };
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum CortexError {
@@ -22,12 +22,12 @@ impl CortexError {
     }
 
     pub fn unclosed_brace(tok: &Token) -> CortexError {
-        let msg = format!("unclosed '{}'", tok.val);
+        let msg = format!("unclosed '{}'", tok.kind.literal());
         CortexError::SyntaxError(msg)
     }
 
     pub fn unopened_brace(tok: &Token) -> CortexError {
-        let msg = format!("unopened '{}'", tok.val);
+        let msg = format!("unopened '{}'", tok.kind.literal());
         CortexError::SyntaxError(msg)
     }
 }
