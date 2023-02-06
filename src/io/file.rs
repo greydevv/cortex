@@ -36,12 +36,12 @@ impl FileHandler {
 
 #[derive(PartialEq, Debug, Copy, Clone)]
 pub struct SourceLocation {
-    pub line: u32,
-    pub col: u32,
+    pub line: usize,
+    pub col: usize,
 }
 
 impl SourceLocation {
-    pub fn new(line: u32, col: u32) -> SourceLocation {
+    pub fn new(line: usize, col: usize) -> SourceLocation {
         SourceLocation {
             line,
             col,

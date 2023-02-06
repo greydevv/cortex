@@ -2,7 +2,16 @@ use std::iter::Peekable;
 
 use crate::io::file::SourceLocation;
 use crate::io::error::CortexError;
-use crate::lexer::token::{ Token, TokenKind, DelimKind, BraceKind, BraceFace, OpKind, KwdKind, Literal };
+use crate::lexer::token::{
+    Token,
+    TokenKind,
+    DelimKind,
+    BraceKind,
+    BraceFace,
+    OpKind,
+    KwdKind,
+    Literal
+};
 
 pub mod token;
 
@@ -128,7 +137,7 @@ impl<'a> Lexer<'_> {
         }
         match val.parse::<i32>() {
             Ok(n) => Ok(Token::new(TokenKind::Num(n), loc)),
-            Err(_) => Err(CortexError::SyntaxError(format!("'{}' is not a valid integer literal", val)))
+            Err(_) => Err(CortexError::SyntaxError(format!("'{}' is not a valid integer literal", val), loc))
         }
     }
 
@@ -212,7 +221,7 @@ impl<'a> Lexer<'_> {
         loop {
             match self.c {
                 '\0' => {
-                    return Err(CortexError::syntax_err("unterminated string literal"));
+                    return Err(CortexError::syntax_err("unterminated string literal", loc));
                 },
                 '"' => {
                     // eat closing quote
@@ -329,7 +338,7 @@ mod tests {
         let src = String::from("\"Hello, world!");
         let mut lexer = Lexer::new(&src);
         let result = lexer.next_token();
-        let expected = CortexError::syntax_err("unterminated string literal");
+        let expected = CortexError::syntax_err("unterminated string literal", SourceLocation::new(1, 1));
 
         assert!(result.is_err());
         assert_eq!(result.err().unwrap(), expected);
@@ -378,7 +387,7 @@ mod tests {
             assert!(lexer.next_token().is_ok());
         }
 
-        let expected = CortexError::syntax_err("unclosed '{'");
+        let expected = CortexError::syntax_err("unclosed '{'", SourceLocation::new(2, 1));
         let result = lexer.next_token();
 
         assert!(result.is_err());
@@ -393,7 +402,7 @@ mod tests {
         // no need to loop, first next_token is only call that should succeed
         assert!(lexer.next_token().is_ok());
 
-        let expected = CortexError::syntax_err("unopened '}'");
+        let expected = CortexError::syntax_err("unopened '}'", SourceLocation::new(2, 1));
         let result = lexer.next_token();
 
         assert!(result.is_err());
