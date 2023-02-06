@@ -129,8 +129,8 @@ impl<'a> Lexer<'_> {
         // initializing with current char before the loop allows a negative sign to appear before a
         // numeric literal
         let mut val = String::from(self.c);
-        self.next_char();
         let loc = self.loc;
+        self.next_char();
         while self.c.is_alphanumeric() {
             val.push(self.c);
             self.next_char();
