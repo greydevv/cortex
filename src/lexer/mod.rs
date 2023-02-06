@@ -137,7 +137,7 @@ impl<'a> Lexer<'_> {
         }
         match val.parse::<i32>() {
             Ok(n) => Ok(Token::new(TokenKind::Num(n), loc)),
-            Err(_) => Err(CortexError::SyntaxError(format!("'{}' is not a valid integer literal", val), loc))
+            Err(_) => Err(CortexError::invalid_integer_literal(&val, loc))
         }
     }
 

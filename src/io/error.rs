@@ -9,27 +9,35 @@ use crate::lexer::token::{ Token, Literal };
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum CortexError {
-    SyntaxError(String, SourceLocation),
+    SyntaxError(String, SourceLocation, Option<String>),
     FileIOError(String),
 }
 
 impl CortexError {
     pub fn syntax_err(msg: &str, loc: SourceLocation) -> CortexError {
-        CortexError::SyntaxError(String::from(msg), loc)
+        CortexError::SyntaxError(String::from(msg), loc, None)
     }
 
     pub fn file_io_err(msg: &str) -> CortexError {
         CortexError::FileIOError(String::from(msg))
     }
 
+    pub fn invalid_integer_literal(literal: &String, loc: SourceLocation) -> CortexError {
+        CortexError::SyntaxError(
+            format!("'{}' is not a valid integer literal", literal),
+            loc,
+            Some(String::from("Integer literals are expressed as a sequence of digits, e.g., \"13\" or \"29\"."))
+        )
+    }
+
     pub fn unclosed_brace(tok: &Token) -> CortexError {
         let msg = format!("unclosed '{}'", tok.kind.literal());
-        CortexError::SyntaxError(msg, tok.loc)
+        CortexError::SyntaxError(msg, tok.loc, None)
     }
 
     pub fn unopened_brace(tok: &Token) -> CortexError {
         let msg = format!("unopened '{}'", tok.kind.literal());
-        CortexError::SyntaxError(msg, tok.loc)
+        CortexError::SyntaxError(msg, tok.loc, None)
     }
 }
 
@@ -50,14 +58,18 @@ fn underline_err(loc: &SourceLocation, fh: &FileHandler) -> String {
 
 impl CortexError {
     pub fn display(&self, fh: &FileHandler) {
-        let (err_kind, err_msg, err_loc) = match self {
-            CortexError::SyntaxError(msg, loc) => ("SyntaxError", msg, Some(loc)),
-            CortexError::FileIOError(msg) => ("FileIOError", msg, None)
+        let (err_kind, err_msg, err_loc, err_info) = match self {
+            CortexError::SyntaxError(msg, loc, info) => ("SyntaxError", msg, Some(loc), info.clone()),
+            CortexError::FileIOError(msg) => ("FileIOError", msg, None, None)
         };
         
         eprintln!("{}: {}", err_kind.red().bold(), err_msg);
         match err_loc {
             Some(loc) => eprintln!("{}", underline_err(&loc, fh)),
+            None => ()
+        }
+        match err_info {
+            Some(info) => eprintln!("{}", info),
             None => ()
         }
     }
@@ -68,7 +80,7 @@ impl error::Error for CortexError {}
 impl fmt::Display for CortexError {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         let (err_kind, err_msg) = match self {
-            CortexError::SyntaxError(msg, _) => ("SyntaxError", msg),
+            CortexError::SyntaxError(msg, _, _) => ("SyntaxError", msg),
             CortexError::FileIOError(msg) => ("FileIOError", msg),
         };
 
