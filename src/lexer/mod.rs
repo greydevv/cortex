@@ -155,6 +155,21 @@ impl<'a> Lexer<'_> {
                     c if c.is_numeric() => return self.lex_num(),
                     _ => TokenKind::Op(OpKind::Sub),
                 },
+            '=' =>
+                match self.peek_char() {
+                    '=' => TokenKind::Op(OpKind::EqlBool),
+                    _ => TokenKind::Op(OpKind::Eql),
+                },
+            '>' =>
+                match self.peek_char() {
+                    '=' => TokenKind::Op(OpKind::GrEql),
+                    _ => TokenKind::Op(OpKind::Gr)
+                },
+            '<' =>
+                match self.peek_char() {
+                    '=' => TokenKind::Op(OpKind::LtEql),
+                    _ => TokenKind::Op(OpKind::Lt)
+                }
             '*' => TokenKind::Op(OpKind::Mul),
             '/' => TokenKind::Op(OpKind::Div),
             '(' => TokenKind::Brace(BraceKind::Paren, BraceFace::Open),

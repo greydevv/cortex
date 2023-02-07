@@ -88,10 +88,21 @@ impl BraceFace {
 
 #[derive(PartialEq, Debug, Clone, strum_macros::Display)]
 pub enum OpKind {
+    // other operators
+    Eql,
+
+    // arithmetic operators
     Add,
     Sub,
     Mul,
     Div,
+
+    // boolean operators
+    EqlBool,
+    Gr,
+    Lt,
+    GrEql,
+    LtEql,
 }
 
 #[derive(PartialEq, Debug, Clone)]
@@ -168,10 +179,17 @@ impl Literal for DelimKind {
 impl Literal for OpKind {
     fn literal(&self) -> String {
         match &self {
+            OpKind::Eql => String::from("="),
             OpKind::Add => String::from("+"),
             OpKind::Sub => String::from("-"),
             OpKind::Mul => String::from("*"),
             OpKind::Div => String::from("/"),
+            OpKind::EqlBool => String::from("=="),
+            OpKind::Gr => String::from(">"),
+            OpKind::Lt => String::from("<"),
+            OpKind::GrEql => String::from(">="),
+            OpKind::LtEql => String::from("<="),
+
         }
     }
 }
