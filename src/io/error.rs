@@ -26,7 +26,7 @@ impl CortexError {
         CortexError::SyntaxError(
             format!("'{}' is not a valid integer literal", literal),
             loc,
-            Some(String::from("Integer literals are expressed as a sequence of digits, e.g., \"13\" or \"29\"."))
+            Some(String::from("Integer literals are expressed as a sequence of digits, e.g., \"23\" or \"921\"."))
         )
     }
 
@@ -46,13 +46,13 @@ fn underline_err(loc: &SourceLocation, fh: &FileHandler) -> String {
     let line_nr = loc.line.to_string();
     let indent = " ".repeat(line_nr.len() + 1);
     format!(
-        "{}|\n{} | {}\n{}|{}{}",
+        "{}|\n{} | {}\n{}| {}{}",
         indent,
         line_nr,
         lines.nth(loc.line - 1).unwrap(),
         indent,
         " ".repeat(loc.col - 1),
-        "^",
+        "^".repeat(1).red().bold(),
     )
 }
 
@@ -87,5 +87,3 @@ impl fmt::Display for CortexError {
         write!(f, "{}: {}\n", err_kind.red().bold(), err_msg)
     }
 }
-
-
