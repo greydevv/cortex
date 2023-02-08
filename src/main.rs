@@ -1,25 +1,43 @@
 use std::env;
-use std::error::Error;
 use std::time::Instant;
 
 use colored::Colorize;
 
+use crate::io::file::FileHandler;
+use crate::io::error::CortexError;
+use crate::parser::Parser;
+
+pub mod io;
+pub mod lexer;
+pub mod parser;
+pub mod ast;
+
 fn main() {
     let mut args = env::args();
     args.next(); // skip executable name
-
     let now = Instant::now();
     let status_string = match compile(args) {
-        Ok(()) => "SUCCESS".green(),
-        Err(e) => {
-            eprintln!("\n{}", e);
-            "FAILURE".red()
-        }
+        Ok(_) => "SUCCESS".green(),
+        Err(_) => "FAILURE".red(),
     }.bold();
     let elapsed = now.elapsed();
     eprintln!("\n[{}, took {:.2}s]", status_string, elapsed.as_secs_f32());
 }
 
-fn compile(mut _args: impl Iterator<Item = String>) -> Result<(), Box<dyn Error>> {
-    Ok(())
+fn compile(mut _args: impl Iterator<Item = String>) -> Result<(), CortexError> {
+    let fh = FileHandler::new(String::from("samples/tokens.cx"))?;
+
+    let mut parser = Parser::new(&fh)?;
+    match parser.parse() {
+        Ok(tree) => { 
+            for node in tree {
+                println!("{}", node.debug(0));
+            }
+            Ok(())
+        },
+        Err(e) => {
+            e.display(&fh);
+            Err(e)
+        }
+    }
 }
