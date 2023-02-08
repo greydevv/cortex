@@ -3,6 +3,14 @@ use std::convert::From;
 
 use crate::io::file::SourceLocation;
 
+pub trait Literal {
+    fn literal(&self) -> String;
+
+    fn len(&self) -> usize {
+        self.literal().len()
+    }
+}
+
 #[derive(Clone)]
 pub struct Token {
     pub kind: TokenKind,
@@ -60,12 +68,57 @@ pub enum TokenKind {
     Unknown(char),
 }
 
+impl Literal for TokenKind {
+    fn literal(&self) -> String {
+        match &self {
+            TokenKind::Num(n) => n.to_string(),
+            TokenKind::Id(s) => s.clone(),
+            TokenKind::String(s) => s.clone(),
+            TokenKind::Arrow => String::from("->"),
+            TokenKind::Delim(delim_kind) => delim_kind.literal(),
+            TokenKind::Brace(brace_kind, brace_face) =>
+                match brace_kind {
+                    BraceKind::Paren =>
+                        match brace_face {
+                            BraceFace::Open => String::from("("),
+                            BraceFace::Closed => String::from(")"),
+                        },
+                    BraceKind::Curly =>
+                        match brace_face {
+                            BraceFace::Open => String::from("{"),
+                            BraceFace::Closed => String::from("}"),
+                        },
+                    BraceKind::Square =>
+                        match brace_face {
+                            BraceFace::Open => String::from("["),
+                            BraceFace::Closed => String::from("]"),
+                        },
+                },
+            TokenKind::Op(op_kind) => op_kind.literal(),
+            TokenKind::Kwd(kwd_kind) => kwd_kind.literal(),
+            TokenKind::EOF => String::from("\\0"),
+            TokenKind::Unknown(c) => c.to_string(),
+        }
+    }
+}
+
 #[derive(PartialEq, Debug, Clone)]
 pub enum DelimKind {
     Period,
     Comma,
     Scolon,
     Colon,
+}
+
+impl Literal for DelimKind {
+    fn literal(&self) -> String {
+        match &self {
+            DelimKind::Period => String::from("."),
+            DelimKind::Comma => String::from(","),
+            DelimKind::Scolon => String::from(";"),
+            DelimKind::Colon => String::from(":"),
+        }
+    }
 }
 
 #[derive(PartialEq, Debug, Clone)]
@@ -110,12 +163,6 @@ pub enum OpKind {
     LtEql,
 }
 
-#[derive(PartialEq)]
-pub enum OpAssoc {
-    Left,
-    Right
-}
-
 impl OpKind {
     pub fn from(tok_kind: TokenKind) -> Option<OpKind> {
         match tok_kind {
@@ -150,77 +197,6 @@ impl OpKind {
     }
 }
 
-#[derive(PartialEq, Debug, Clone)]
-pub enum KwdKind {
-    Func,
-    Include,
-    For,
-}
-
-impl KwdKind {
-    pub fn from_string(value: &String) -> Option<KwdKind> {
-        match value.as_str() {
-            "func" => Some(KwdKind::Func),
-            "include" => Some(KwdKind::Include),
-            "for" => Some(KwdKind::For),
-            _ => None,
-        }
-    }
-}
-
-pub trait Literal {
-    fn literal(&self) -> String;
-
-    fn len(&self) -> usize {
-        self.literal().len()
-    }
-}
-
-impl Literal for TokenKind {
-    fn literal(&self) -> String {
-        match &self {
-            TokenKind::Num(n) => n.to_string(),
-            TokenKind::Id(s) => s.clone(),
-            TokenKind::String(s) => s.clone(),
-            TokenKind::Arrow => String::from("->"),
-            TokenKind::Delim(delim_kind) => delim_kind.literal(),
-            TokenKind::Brace(brace_kind, brace_face) => 
-                match brace_kind {
-                    BraceKind::Paren =>
-                        match brace_face {
-                            BraceFace::Open => String::from("("),
-                            BraceFace::Closed => String::from(")"),
-                        },
-                    BraceKind::Curly =>
-                        match brace_face {
-                            BraceFace::Open => String::from("{"),
-                            BraceFace::Closed => String::from("}"),
-                        },
-                    BraceKind::Square =>
-                        match brace_face {
-                            BraceFace::Open => String::from("["),
-                            BraceFace::Closed => String::from("]"),
-                        },
-                },
-            TokenKind::Op(op_kind) => op_kind.literal(),
-            TokenKind::Kwd(kwd_kind) => kwd_kind.literal(),
-            TokenKind::EOF => String::from("\\0"),
-            TokenKind::Unknown(c) => c.to_string(),
-        }
-    }
-}
-
-impl Literal for DelimKind {
-    fn literal(&self) -> String {
-        match &self {
-            DelimKind::Period => String::from("."),
-            DelimKind::Comma => String::from(","),
-            DelimKind::Scolon => String::from(";"),
-            DelimKind::Colon => String::from(":"),
-        }
-    }
-}
-
 impl Literal for OpKind {
     fn literal(&self) -> String {
         match &self {
@@ -235,6 +211,30 @@ impl Literal for OpKind {
             OpKind::GrEql => String::from(">="),
             OpKind::LtEql => String::from("<="),
 
+        }
+    }
+}
+
+#[derive(PartialEq)]
+pub enum OpAssoc {
+    Left,
+    Right
+}
+
+#[derive(PartialEq, Debug, Clone)]
+pub enum KwdKind {
+    Func,
+    Include,
+    For,
+}
+
+impl KwdKind {
+    pub fn from_string(value: &String) -> Option<KwdKind> {
+        match value.as_str() {
+            "func" => Some(KwdKind::Func),
+            "include" => Some(KwdKind::Include),
+            "for" => Some(KwdKind::For),
+            _ => None,
         }
     }
 }
