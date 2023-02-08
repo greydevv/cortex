@@ -30,6 +30,14 @@ impl CortexError {
         )
     }
 
+    pub fn expected_bin_op(literal: &String, loc: SourceLocation) -> CortexError {
+        CortexError::SyntaxError(
+            format!("'{}' is not a binary operator", literal),
+            loc,
+            None,
+        )
+    }
+
     pub fn unclosed_brace(tok: &Token) -> CortexError {
         let msg = format!("unclosed '{}'", tok.kind.literal());
         CortexError::SyntaxError(msg, tok.loc, None)
@@ -49,7 +57,7 @@ fn underline_err(loc: &SourceLocation, fh: &FileHandler) -> String {
         "{}|\n{} | {}\n{}| {}{}",
         indent,
         line_nr,
-        lines.nth(loc.line - 1).unwrap(),
+        lines.nth(loc.line - 1).unwrap_or_else(|| ""),
         indent,
         " ".repeat(loc.col - 1),
         "^".repeat(1).red().bold(),
