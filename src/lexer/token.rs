@@ -1,4 +1,5 @@
 use std::fmt;
+use std::convert::From;
 
 use crate::io::file::SourceLocation;
 
@@ -32,6 +33,10 @@ impl Token {
                 },
             _ => false
         }
+    }
+
+    pub fn is_eof(&self) -> bool {
+        self.kind == TokenKind::EOF
     }
 }
 
@@ -103,6 +108,46 @@ pub enum OpKind {
     Lt,
     GrEql,
     LtEql,
+}
+
+#[derive(PartialEq)]
+pub enum OpAssoc {
+    Left,
+    Right
+}
+
+impl OpKind {
+    pub fn from(tok_kind: TokenKind) -> Option<OpKind> {
+        match tok_kind {
+            TokenKind::Op(op_kind) => Some(op_kind),
+            _ => None,
+        }
+    }
+
+    pub fn prec(&self) -> i32 {
+        match *self {
+            OpKind::Mul | OpKind::Div => 5,
+            OpKind::Add | OpKind::Sub => 4,
+            OpKind::Gr | OpKind::Lt | OpKind::GrEql | OpKind::LtEql => 3,
+            OpKind::EqlBool => 2,
+            OpKind::Eql => 1,
+        }
+    }
+
+    pub fn assoc(&self) -> OpAssoc {
+        match *self {
+            OpKind::Eql => OpAssoc::Right,
+            OpKind::Add
+                | OpKind::Sub
+                | OpKind::Mul
+                | OpKind::Div
+                | OpKind::EqlBool
+                | OpKind::Gr
+                | OpKind::Lt
+                | OpKind::GrEql
+                | OpKind::LtEql => OpAssoc::Left,
+        }
+    }
 }
 
 #[derive(PartialEq, Debug, Clone)]
