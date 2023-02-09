@@ -22,8 +22,19 @@ impl<'a> Parser<'_> {
     pub fn parse(&mut self) -> Result<Vec<AstNode>, CortexError> {
         let mut tree = Vec::new();
         while !self.tok.is_eof() {
-            // just parsing expressions for now
-            tree.push(self.parse_expr()?);
+            let child = match self.tok.kind {
+                TokenKind::Id(_) => self.parse_expr()?,
+                TokenKind::Kwd(ref kwd_kind) => {
+                    let kind = kwd_kind.clone();
+                    self.advance()?;
+                    AstNode::Stmt {
+                        kind,
+                        expr: Box::new(self.parse_expr()?)
+                    }
+                },
+                _ => unimplemented!("How to start?"),
+            };
+            tree.push(child);
         }
         Ok(tree)
     }
@@ -60,7 +71,7 @@ impl<'a> Parser<'_> {
                 TokenKind::Op(_) => (),
                 TokenKind::EOF | _ => break,
             }
-            match OpKind::from(self.tok.kind.clone()) {
+            match OpKind::from(&self.tok.kind) {
                 Some(op_kind) => {
                     let prec = op_kind.prec();
                     if prec < min_prec {

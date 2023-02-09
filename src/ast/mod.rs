@@ -1,4 +1,4 @@
-use crate::lexer::token::OpKind;
+use crate::lexer::token::{ KwdKind, OpKind };
 
 #[derive(Clone, strum_macros::Display)]
 pub enum AstNode {
@@ -6,13 +6,17 @@ pub enum AstNode {
     Id(String),
     UnaryExpr {
         op: OpKind,
-        child: Box<AstNode>
+        child: Box<AstNode>,
     },
     BinaryExpr {
         op: OpKind,
         lhs: Box<AstNode>,
-        rhs: Box<AstNode>
-    }
+        rhs: Box<AstNode>,
+    },
+    Stmt {
+        kind: KwdKind,
+        expr: Box<AstNode>,
+    },
 }
 
 impl AstNode {
@@ -27,7 +31,8 @@ impl AstNode {
                     lhs.debug(indents+1),
                     rhs.debug(indents+1),
                 ),
-            _ => unimplemented!()
+            AstNode::Stmt { kind, expr } => format!("({})\n{}", kind, expr.debug(indents+1)),
+            _ => unimplemented!("AstNode member, '{}', debug string", self)
         };
 
         format!("{}{}{}", "  ".repeat(indents).to_string(), self, ast_string)
