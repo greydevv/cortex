@@ -164,9 +164,9 @@ pub enum OpKind {
 }
 
 impl OpKind {
-    pub fn from(tok_kind: TokenKind) -> Option<OpKind> {
+    pub fn from(tok_kind: &TokenKind) -> Option<OpKind> {
         match tok_kind {
-            TokenKind::Op(op_kind) => Some(op_kind),
+            TokenKind::Op(op_kind) => Some(op_kind.clone()),
             _ => None,
         }
     }
@@ -221,11 +221,13 @@ pub enum OpAssoc {
     Right
 }
 
-#[derive(PartialEq, Debug, Clone)]
+#[derive(PartialEq, Debug, Clone, strum_macros::Display)]
 pub enum KwdKind {
     Func,
     Include,
     For,
+    Let,
+    Ret,
 }
 
 impl KwdKind {
@@ -234,6 +236,8 @@ impl KwdKind {
             "func" => Some(KwdKind::Func),
             "include" => Some(KwdKind::Include),
             "for" => Some(KwdKind::For),
+            "let" => Some(KwdKind::Let),
+            "ret" => Some(KwdKind::Ret),
             _ => None,
         }
     }
@@ -245,6 +249,8 @@ impl Literal for KwdKind {
             KwdKind::For => String::from("for"),
             KwdKind::Func => String::from("func"),
             KwdKind::Include => String::from("include"),
+            KwdKind::Let => String::from("let"),
+            KwdKind::Ret => String::from("ret"),
         }
     }
 }
