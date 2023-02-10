@@ -7,10 +7,9 @@ use crate::lexer::token::{
     TokenKind,
     DelimKind,
     BraceKind,
-    BraceFace,
     OpKind,
     KwdKind,
-    Literal
+    Literal,
 };
 
 pub mod token;
@@ -172,12 +171,12 @@ impl<'a> Lexer<'_> {
                 }
             '*' => TokenKind::Op(OpKind::Mul),
             '/' => TokenKind::Op(OpKind::Div),
-            '(' => TokenKind::Brace(BraceKind::Paren, BraceFace::Open),
-            ')' => TokenKind::Brace(BraceKind::Paren, BraceFace::Closed),
-            '{' => TokenKind::Brace(BraceKind::Curly, BraceFace::Open),
-            '}' => TokenKind::Brace(BraceKind::Curly, BraceFace::Closed),
-            '[' => TokenKind::Brace(BraceKind::Square, BraceFace::Open),
-            ']' => TokenKind::Brace(BraceKind::Square, BraceFace::Closed),
+            '(' => TokenKind::BraceOpen(BraceKind::Paren),
+            ')' => TokenKind::BraceClosed(BraceKind::Paren),
+            '{' => TokenKind::BraceOpen(BraceKind::Curly),
+            '}' => TokenKind::BraceClosed(BraceKind::Curly),
+            '[' => TokenKind::BraceOpen(BraceKind::Square),
+            ']' => TokenKind::BraceClosed(BraceKind::Square),
             _ => TokenKind::Unknown(self.c),
         };
         for _ in 0..kind.len() {
@@ -186,7 +185,7 @@ impl<'a> Lexer<'_> {
 
         let tok = Token::new(kind, loc);
         match tok.kind {
-            TokenKind::Brace(_, _) => self.update_balancing_state(tok.clone())?,
+            TokenKind::BraceOpen(_) | TokenKind::BraceClosed(_) => self.update_balancing_state(tok.clone())?,
             _ => ()
         }
         Ok(tok)
@@ -194,31 +193,28 @@ impl<'a> Lexer<'_> {
 
     fn update_balancing_state(&mut self, tok: Token) -> Result<(), CortexError> {
         match &tok.kind {
-            TokenKind::Brace(_, brace_face) =>
-                match brace_face {
-                    BraceFace::Open => self.brace_stack.push(tok),
-                    BraceFace::Closed => {
-                        let top_tok = match self.brace_stack.pop() {
-                            // proceed normally if the current closing brace matches an opening
-                            // brace on top of stack
-                            Some(opening_tok) if tok.closes(&opening_tok) => return Ok(()),
-                            Some(opening_tok) => opening_tok,
-                            // stack is empty, the current closing brace is unopened
-                            None => return Err(CortexError::unopened_brace(&tok)),
-                        };
-                        // unwind the balancing state (brace_stack) to see if the current closing token
-                        // was opened somewhere previously
-                        while let Some(opening_tok) = self.brace_stack.pop() {
-                            // found a matching opening token, the token on the top of the stack was
-                            // unclosed
-                            if tok.closes(&opening_tok) {
-                                return Err(CortexError::unclosed_brace(&top_tok));
-                            }
-                        }
-                        // did not find a matching opening token, the current closing token is unopened
-                        return Err(CortexError::unopened_brace(&tok));
-                    },
-                },
+            TokenKind::BraceOpen(_) => self.brace_stack.push(tok),
+            TokenKind::BraceClosed(_) => {
+                let top_tok = match self.brace_stack.pop() {
+                    // proceed normally if the current closing brace matches an opening
+                    // brace on top of stack
+                    Some(opening_tok) if tok.closes(&opening_tok) => return Ok(()),
+                    Some(opening_tok) => opening_tok,
+                    // stack is empty, the current closing brace is unopened
+                    None => return Err(CortexError::unopened_brace(&tok)),
+                };
+                // unwind the balancing state (brace_stack) to see if the current closing token
+                // was opened somewhere previously
+                while let Some(opening_tok) = self.brace_stack.pop() {
+                    // found a matching opening token, the token on the top of the stack was
+                    // unclosed
+                    if tok.closes(&opening_tok) {
+                        return Err(CortexError::unclosed_brace(&top_tok));
+                    }
+                }
+                // did not find a matching opening token, the current closing token is unopened
+                return Err(CortexError::unopened_brace(&tok));
+            },
             _ => ()
         }
         Ok(())

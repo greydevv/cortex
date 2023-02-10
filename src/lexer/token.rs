@@ -34,9 +34,9 @@ impl Token {
 
     pub fn closes(&self, other: &Token) -> bool {
         match &self.kind {
-            TokenKind::Brace(brace_kind, brace_face) if *brace_face == BraceFace::Closed =>
+            TokenKind::BraceClosed(open_brace_kind) =>
                 match &other.kind {
-                    TokenKind::Brace(other_brace_kind, _) => *brace_kind == *other_brace_kind,
+                    TokenKind::BraceOpen(closed_brace_kind) => *open_brace_kind == *closed_brace_kind,
                     _ => false,
                 },
             _ => false
@@ -61,7 +61,8 @@ pub enum TokenKind {
     String(String),
     Arrow,
     Delim(DelimKind),
-    Brace(BraceKind, BraceFace),
+    BraceOpen(BraceKind),
+    BraceClosed(BraceKind),
     Op(OpKind),
     Kwd(KwdKind),
     EOF,
@@ -76,23 +77,17 @@ impl Literal for TokenKind {
             TokenKind::String(s) => s.clone(),
             TokenKind::Arrow => String::from("->"),
             TokenKind::Delim(delim_kind) => delim_kind.literal(),
-            TokenKind::Brace(brace_kind, brace_face) =>
+            TokenKind::BraceOpen(brace_kind) =>
                 match brace_kind {
-                    BraceKind::Paren =>
-                        match brace_face {
-                            BraceFace::Open => String::from("("),
-                            BraceFace::Closed => String::from(")"),
-                        },
-                    BraceKind::Curly =>
-                        match brace_face {
-                            BraceFace::Open => String::from("{"),
-                            BraceFace::Closed => String::from("}"),
-                        },
-                    BraceKind::Square =>
-                        match brace_face {
-                            BraceFace::Open => String::from("["),
-                            BraceFace::Closed => String::from("]"),
-                        },
+                    BraceKind::Paren => String::from("("),
+                    BraceKind::Curly => String::from("{"),
+                    BraceKind::Square => String::from("["),
+                },
+            TokenKind::BraceClosed(brace_kind) =>
+                match brace_kind {
+                    BraceKind::Paren => String::from(")"),
+                    BraceKind::Curly => String::from("}"),
+                    BraceKind::Square => String::from("]"),
                 },
             TokenKind::Op(op_kind) => op_kind.literal(),
             TokenKind::Kwd(kwd_kind) => kwd_kind.literal(),
@@ -126,22 +121,6 @@ pub enum BraceKind {
     Paren,
     Curly,
     Square,
-}
-
-#[derive(PartialEq, Debug, Clone)]
-pub enum BraceFace {
-    Open,
-    Closed,
-}
-
-impl BraceFace {
-    pub fn is_closed(&self) -> bool {
-        *self == BraceFace::Closed
-    } 
-
-    pub fn is_open(&self) -> bool {
-        *self == BraceFace::Open
-    }
 }
 
 #[derive(PartialEq, Debug, Clone, strum_macros::Display)]
