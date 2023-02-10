@@ -2,7 +2,7 @@ use crate::io::file::FileHandler;
 use crate::io::error::CortexError;
 use crate::lexer::Lexer;
 use crate::ast::AstNode;
-use crate::lexer::token::{ Token, TokenKind, OpKind, OpAssoc, DelimKind, BraceKind, BraceFace, Literal };
+use crate::lexer::token::{ Token, TokenKind, OpKind, OpAssoc, KwdKind, DelimKind, BraceKind, Literal };
 
 pub struct Parser<'a> {
     lexer: Lexer<'a>,
@@ -19,36 +19,75 @@ impl<'a> Parser<'_> {
         })
     }
 
-    pub fn parse(&mut self) -> Result<Vec<AstNode>, CortexError> {
+    pub fn parse(&mut self) -> Result<Vec<Box<AstNode>>, CortexError> {
         let mut tree = Vec::new();
         while !self.tok.is_eof() {
-            let child = match self.tok.kind {
+            let child = match self.tok.kind.clone() {
                 TokenKind::Id(_) => self.parse_expr()?,
-                TokenKind::Kwd(ref kwd_kind) => {
-                    let kind = kwd_kind.clone();
-                    self.advance()?;
-                    AstNode::Stmt {
-                        kind,
-                        expr: Box::new(self.parse_expr()?)
-                    }
-                },
-                _ => unimplemented!("How to start?"),
+                TokenKind::Kwd(ref kwd_kind) => self.parse_kwd(kwd_kind)?,
+                TokenKind::BraceOpen(_) | TokenKind::BraceClosed(_) => break,
+                _ => unimplemented!("How to start?: {}", self.tok),
             };
-            tree.push(child);
+            tree.push(Box::new(child));
         }
         Ok(tree)
+    }
+
+    fn parse_kwd(&mut self, kwd_kind: &KwdKind) -> Result<AstNode, CortexError> {
+        let node = match *kwd_kind {
+            KwdKind::Func => self.parse_func()?,
+            KwdKind::Let | KwdKind::Ret => {
+                self.advance()?; // skip kwd
+                AstNode::Stmt {
+                    kind: kwd_kind.clone(),
+                    expr: Box::new(self.parse_expr()?)
+                }
+            },
+            _ => unimplemented!("parse_kwd: '{}'", *kwd_kind),
+        };
+        Ok(node)
+    }
+
+    fn parse_func(&mut self) -> Result<AstNode, CortexError> {
+        self.advance()?; // skip 'func' kwd
+        let func_id = self.tok.kind.literal();
+        self.eat(TokenKind::Id(String::new()))?;
+        self.eat(TokenKind::BraceOpen(BraceKind::Paren))?;
+        let mut params = Vec::new();
+        loop {
+            match &self.tok.kind {
+                TokenKind::Id(ref param_id) => {
+                    params.push(Box::new(AstNode::Id(param_id.clone())))
+                },
+                TokenKind::Delim(DelimKind::Comma) => (),
+                _ => break,
+            }
+            self.advance()?;
+        }
+        self.eat(TokenKind::BraceClosed(BraceKind::Paren))?;
+        self.eat(TokenKind::Arrow)?;
+        self.eat(TokenKind::Id(String::new()))?;
+        self.eat(TokenKind::BraceOpen(BraceKind::Curly))?;
+        let body = self.parse()?;
+        self.eat(TokenKind::BraceClosed(BraceKind::Curly))?;
+        let node = AstNode::Func {
+            id: func_id,
+            params,
+            body: Box::new(AstNode::Compound { children: body })
+        };
+        Ok(node)
     }
 
     fn parse_term(&mut self) -> Result<AstNode, CortexError> {
         let node = match &self.tok.kind {
             TokenKind::Num(n) => AstNode::Num(*n),
             TokenKind::Id(id) => AstNode::Id(id.clone()),
-            TokenKind::Brace(brace_kind, brace_face) if *brace_kind == BraceKind::Paren && *brace_face == BraceFace::Open => {
+            TokenKind::BraceOpen(brace_kind) if *brace_kind == BraceKind::Paren => {
                 // pass opening parenthesis
                 self.advance()?;
                 let expr = self.parse_expr_helper(0)?;
                 // expect closing parenthesis
-                self.eat(TokenKind::Brace(BraceKind::Paren, BraceFace::Closed))?;
+                self.eat(TokenKind::BraceClosed(BraceKind::Paren))?;
                 return Ok(expr);
             },
             _ => return Err(CortexError::SyntaxError(format!("unknown operand in binary expression: {}", self.tok), self.tok.loc, None))
@@ -104,6 +143,7 @@ impl<'a> Parser<'_> {
     fn eat(&mut self, expected_kind: TokenKind) -> Result<(), CortexError> {
         let tok_expected = match (&self.tok.kind, &expected_kind) {
             (TokenKind::Num(_), TokenKind::Num(_)) => true,
+            (TokenKind::Id(_), TokenKind::Id(_)) => true,
             _ => self.tok.kind == expected_kind
         };
         if !tok_expected {

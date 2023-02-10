@@ -17,6 +17,14 @@ pub enum AstNode {
         kind: KwdKind,
         expr: Box<AstNode>,
     },
+    Func {
+        id: String,
+        params: Vec<Box<AstNode>>,
+        body: Box<AstNode>,
+    },
+    Compound {
+        children: Vec<Box<AstNode>>
+    },
 }
 
 impl AstNode {
@@ -32,10 +40,37 @@ impl AstNode {
                     rhs.debug(indents+1),
                 ),
             AstNode::Stmt { kind, expr } => format!("({})\n{}", kind, expr.debug(indents+1)),
+            AstNode::Func { id, params, body } if params.is_empty() => format!("({})\n{}", id, body.debug(indents+1)),
+            AstNode::Func { id, params, body } => {
+                let mut params_str = String::new();
+                for (i, param) in params.iter().enumerate() {
+                    let param_str = if i == params.len()-1 {
+                        format!("{}", param.debug(0))
+                    } else {
+                        format!("{}, ", param.debug(0))
+                    };
+                    params_str = params_str + &param_str;
+                }
+                format!("({}: {})\n{}", id, params_str, body.debug(indents+1))
+            },
+            AstNode::Compound { children } => {
+                let mut children_str = String::new();
+                for (i, child) in children.iter().enumerate() {
+                    let child_str = if i == 0 {
+                        format!("{}", child.debug(indents))
+                    } else {
+                        format!("\n{}", child.debug(indents))
+                    };
+                    children_str = children_str + &child_str;
+                }
+                // return early because we only want to include contents of compound and not any
+                // additional information
+                return format!("{}", children_str);
+            }
             _ => unimplemented!("AstNode member, '{}', debug string", self)
         };
 
-        format!("{}{}{}", "  ".repeat(indents).to_string(), self, ast_string)
+        format!("{}{}{}", "  ".repeat(indents), self, ast_string)
     }
 
     // pub fn fold(&self) -> Option<AstNode> {
