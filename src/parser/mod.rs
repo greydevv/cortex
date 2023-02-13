@@ -7,6 +7,7 @@ use crate::lexer::token::{ Token, TokenKind, OpKind, OpAssoc, TyKind, KwdKind, D
 pub struct Parser<'a> {
     lexer: Lexer<'a>,
     tok: Token,
+    prev_tok: Token,
 }
 
 impl<'a> Parser<'_> {
@@ -16,6 +17,7 @@ impl<'a> Parser<'_> {
         Ok(Parser {
             lexer,
             tok,
+            prev_tok: Token::dummy(),
         })
     }
 
@@ -50,14 +52,12 @@ impl<'a> Parser<'_> {
 
     fn parse_func(&mut self) -> Result<AstNode, CortexError> {
         self.advance()?; // skip 'func' kwd
-        let func_id = self.tok.value();
-        self.expect_id(format!("expected function name but found '{}' instead", self.tok.value()))?;
+        let func_id = self.expect_id(format!("expected function name but found '{}' instead", self.tok.value()))?;
         self.eat(TokenKind::BraceOpen(BraceKind::Paren))?;
         let mut params = Vec::new();
         if let TokenKind::Id(_) = self.tok.kind {
             loop {
-                let param_id = self.tok.value();
-                self.expect_id(format!("expected parameter identifier after comma, but found '{}' instead", self.tok.value()))?;
+                let param_id = self.expect_id(format!("expected parameter identifier after comma, but found '{}' instead", self.tok.value()))?;
                 params.push(Box::new(AstNode::Id(param_id)));
                 match &self.tok.kind {
                     TokenKind::Delim(DelimKind::Comma) => (),
@@ -147,26 +147,27 @@ impl<'a> Parser<'_> {
     }
 
     fn advance(&mut self) -> Result<(), CortexError> {
+        self.prev_tok = self.tok.clone();
         self.tok = self.lexer.next_token()?;
         Ok(())
     }
 
-    fn expect_id(&mut self, with_msg: String) -> Result<(), CortexError> {
-        self.eat(TokenKind::Id(String::new())).map_err(|err| {
-            match err {
-                CortexError::SyntaxError(_, span, info) => CortexError::SyntaxError(with_msg, span, info),
-                _ => err
-            }
-        })
+    fn expect_id(&mut self, with_msg: String) -> Result<String, CortexError> {
+        let result = match &self.tok.kind {
+            TokenKind::Id(ident) => Ok(ident.to_owned()),
+            _ => Err(CortexError::SyntaxError(with_msg, self.tok.span, None))
+        };
+        self.advance()?;
+        result
     }
 
     fn expect_ty(&mut self) -> Result<TyKind, CortexError> {
-        if let TokenKind::Ty(ty_kind) = self.tok.kind.clone() {
-            self.advance()?;
-            Ok(ty_kind)
-        } else {
-            Err(CortexError::SyntaxError(format!("expected type but got '{}' instead", self.tok.value()), self.tok.span, None))
-        }
+        let result = match &self.tok.kind {
+            TokenKind::Ty(ty_kind) => Ok(ty_kind.to_owned()),
+            _ => Err(CortexError::SyntaxError(format!("expected type but got '{}' instead", self.tok.value()), self.tok.span, None))
+        };
+        self.advance()?;
+        result
     }
 
     fn eat(&mut self, expected_kind: TokenKind) -> Result<(), CortexError> {
