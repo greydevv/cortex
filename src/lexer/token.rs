@@ -30,10 +30,17 @@ impl Token {
     }
 
     pub fn eof(pos: FilePos) -> Token {
-        Token {
-            kind: TokenKind::EOF,
-            span: FileSpan::new(pos, FilePos::new(pos.line, pos.col+1)),
-        }
+        Token::new(
+            TokenKind::EOF,
+            FileSpan::new(pos, FilePos::new(pos.line, pos.col+1))
+        )
+    }
+
+    pub fn dummy() -> Token {
+        Token::new(
+            TokenKind::Dummy,
+            FileSpan::new(FilePos::new(0, 0), FilePos::new(0, 0)),
+        )
     }
 
     pub fn closes(&self, other: &Token) -> bool {
@@ -76,11 +83,12 @@ pub enum TokenKind {
     Kwd(KwdKind),
     EOF,
     Unknown(char),
+    Dummy,
 }
 
 impl Literal for TokenKind {
     fn literal(&self) -> String {
-        match &self {
+        match self {
             TokenKind::Num(n) => n.to_string(),
             TokenKind::Id(s) => s.clone(),
             TokenKind::String(s) => s.clone(),
@@ -103,6 +111,7 @@ impl Literal for TokenKind {
             TokenKind::Kwd(kwd_kind) => kwd_kind.literal(),
             TokenKind::EOF => String::from("\\0"),
             TokenKind::Unknown(c) => c.to_string(),
+            TokenKind::Dummy => String::from("dummy"),
         }
     }
 }
