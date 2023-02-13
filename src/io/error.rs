@@ -5,7 +5,7 @@ use std::convert::From;
 use colored::Colorize;
 
 use crate::io::file::{ FileHandler, FileSpan };
-use crate::lexer::token::Token;
+use crate::lexer::token::{ Token, Len };
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum CortexError {

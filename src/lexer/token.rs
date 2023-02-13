@@ -3,16 +3,16 @@ use std::convert::From;
 
 use crate::io::file::{ FilePos, FileSpan };
 
+pub trait Len {
+    fn len(&self) -> usize;
+}
+
 pub trait MaybeFrom<T>: Sized {
     fn maybe_from(value: T) -> Option<Self>;
 }
 
 pub trait Literal {
     fn literal(&self) -> String;
-
-    fn len(&self) -> usize {
-        self.literal().len()
-    }
 }
 
 #[derive(Clone)]
@@ -113,6 +113,12 @@ impl Literal for TokenKind {
             TokenKind::Unknown(c) => c.to_string(),
             TokenKind::Dummy => String::from("dummy"),
         }
+    }
+}
+
+impl Len for TokenKind {
+    fn len(&self) -> usize {
+        self.literal().len()
     }
 }
 
@@ -285,16 +291,16 @@ mod tests {
     fn closes() {
         let compat_toks = vec![
             (
-                Token::new(TokenKind::BraceOpen(BraceKind::Paren), FileSpan::default()),
-                Token::new(TokenKind::BraceClosed(BraceKind::Paren), FileSpan::default()),
+                Token::new(TokenKind::BraceOpen(BraceKind::Paren), FileSpan::one(FilePos::new(1,1))),
+                Token::new(TokenKind::BraceClosed(BraceKind::Paren), FileSpan::one(FilePos::new(1,1))),
             ),
             (
-                Token::new(TokenKind::BraceOpen(BraceKind::Curly), FileSpan::default()),
-                Token::new(TokenKind::BraceClosed(BraceKind::Curly), FileSpan::default()),
+                Token::new(TokenKind::BraceOpen(BraceKind::Curly), FileSpan::one(FilePos::new(1,1))),
+                Token::new(TokenKind::BraceClosed(BraceKind::Curly), FileSpan::one(FilePos::new(1,1))),
             ),
             (
-                Token::new(TokenKind::BraceOpen(BraceKind::Square), FileSpan::default()),
-                Token::new(TokenKind::BraceClosed(BraceKind::Square), FileSpan::default()),
+                Token::new(TokenKind::BraceOpen(BraceKind::Square), FileSpan::one(FilePos::new(1,1))),
+                Token::new(TokenKind::BraceClosed(BraceKind::Square), FileSpan::one(FilePos::new(1,1))),
             ),
         ];
 
@@ -304,16 +310,16 @@ mod tests {
 
         let incompat_toks = vec![
             (
-                Token::new(TokenKind::BraceOpen(BraceKind::Paren), FileSpan::default()),
-                Token::new(TokenKind::BraceOpen(BraceKind::Paren), FileSpan::default()),
+                Token::new(TokenKind::BraceOpen(BraceKind::Paren), FileSpan::one(FilePos::new(1,1))),
+                Token::new(TokenKind::BraceOpen(BraceKind::Paren), FileSpan::one(FilePos::new(1,1))),
             ),
             (
-                Token::new(TokenKind::BraceOpen(BraceKind::Curly), FileSpan::default()),
-                Token::new(TokenKind::BraceClosed(BraceKind::Paren), FileSpan::default()),
+                Token::new(TokenKind::BraceOpen(BraceKind::Curly), FileSpan::one(FilePos::new(1,1))),
+                Token::new(TokenKind::BraceClosed(BraceKind::Paren), FileSpan::one(FilePos::new(1,1))),
             ),
             (
-                Token::new(TokenKind::BraceOpen(BraceKind::Square), FileSpan::default()),
-                Token::new(TokenKind::BraceClosed(BraceKind::Curly), FileSpan::default()),
+                Token::new(TokenKind::BraceOpen(BraceKind::Square), FileSpan::one(FilePos::new(1,1))),
+                Token::new(TokenKind::BraceClosed(BraceKind::Curly), FileSpan::one(FilePos::new(1,1))),
             ),
         ];
 

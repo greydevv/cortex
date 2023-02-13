@@ -10,7 +10,7 @@ use crate::lexer::token::{
     OpKind,
     TyKind,
     KwdKind,
-    Literal,
+    Len,
     MaybeFrom,
 };
 

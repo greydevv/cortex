@@ -2,6 +2,7 @@ use std::fs::File;
 use std::io::{ Read, ErrorKind };
 use std::fmt;
 
+use crate::lexer::token::Len;
 use crate::io::error::CortexError;
 
 pub struct FileHandler {
@@ -41,11 +42,6 @@ pub struct FileSpan {
 }
 
 impl FileSpan {
-    pub fn len(&self) -> usize {
-        // TODO: this will not work for multiline spans
-        self.end.col - self.beg.col
-    }
-
     pub fn new(beg: FilePos, end: FilePos) -> FileSpan {
         FileSpan {
             beg,
@@ -54,14 +50,19 @@ impl FileSpan {
     }
 
     pub fn one(beg: FilePos) -> FileSpan {
-        FileSpan {
+        let end = FilePos::new(beg.line, beg.col+1);
+        FileSpan::new(
             beg,
-            end: FilePos::new(beg.line, beg.col+1)
-        }
-    }
+            end,
+        )
 
-    pub fn default() -> FileSpan {
-        FileSpan::new(FilePos::new(1, 1), FilePos::new(1, 2))
+    }
+}
+
+impl Len for FileSpan {
+    fn len(&self) -> usize {
+        // TODO: this will not work for multiline spans
+        self.end.col - self.beg.col
     }
 }
 
