@@ -1,4 +1,4 @@
-use crate::lexer::token::{ KwdKind, OpKind };
+use crate::lexer::token::{ TyKind, KwdKind, OpKind };
 
 #[derive(Clone, strum_macros::Display)]
 pub enum AstNode {
@@ -19,6 +19,7 @@ pub enum AstNode {
     },
     Func {
         id: String,
+        ret_ty: TyKind,
         params: Vec<Box<AstNode>>,
         body: Box<AstNode>,
     },
@@ -40,8 +41,8 @@ impl AstNode {
                     rhs.debug(indents+1),
                 ),
             AstNode::Stmt { kind, expr } => format!("({})\n{}", kind, expr.debug(indents+1)),
-            AstNode::Func { id, params, body } if params.is_empty() => format!("({})\n{}", id, body.debug(indents+1)),
-            AstNode::Func { id, params, body } => {
+            AstNode::Func { id, ret_ty, params, body } if params.is_empty() => format!("({}) -> {}\n{}", id, ret_ty, body.debug(indents+1)),
+            AstNode::Func { id, ret_ty, params, body } => {
                 let mut params_str = String::new();
                 for (i, param) in params.iter().enumerate() {
                     let param_str = if i == params.len()-1 {
@@ -51,7 +52,7 @@ impl AstNode {
                     };
                     params_str = params_str + &param_str;
                 }
-                format!("({}: {})\n{}", id, params_str, body.debug(indents+1))
+                format!("({}: {}) -> {}\n{}", id, params_str, ret_ty, body.debug(indents+1))
             },
             AstNode::Compound { children } => {
                 let mut children_str = String::new();
