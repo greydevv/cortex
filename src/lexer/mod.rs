@@ -1,6 +1,6 @@
 use std::iter::Peekable;
 
-use crate::io::file::SourceLocation;
+use crate::io::file::FilePos;
 use crate::io::error::CortexError;
 use crate::lexer::token::{
     Token,
@@ -18,7 +18,7 @@ pub mod token;
 
 pub struct Lexer<'a> {
     c: char,
-    loc: SourceLocation,
+    loc: FilePos,
     brace_stack: Vec<Token>,
     chars: Peekable<std::str::Chars<'a>>,
 }
@@ -33,7 +33,7 @@ impl<'a> Lexer<'_> {
         Lexer {
             c,
             brace_stack: Vec::new(),
-            loc: SourceLocation::default(),
+            loc: FilePos::default(),
             chars,
         }
     }
@@ -290,7 +290,7 @@ mod tests {
 
         let tok = lexer.next_token()?;
         assert_eq!(tok.kind, TokenKind::EOF);
-        assert_eq!(tok.loc, SourceLocation::new(1, 1));
+        assert_eq!(tok.loc, FilePos::new(1, 1));
         Ok(())
     }
 
@@ -301,7 +301,7 @@ mod tests {
 
         let tok = lexer.next_token()?;
         assert_eq!(tok.kind, TokenKind::EOF);
-        assert_eq!(tok.loc, SourceLocation::new(3, 1));
+        assert_eq!(tok.loc, FilePos::new(3, 1));
         Ok(())
     }
 
@@ -313,7 +313,7 @@ mod tests {
         lexer.next_token()?;
         let tok = lexer.next_token()?;
         assert_eq!(tok.kind, TokenKind::EOF);
-        assert_eq!(tok.loc, SourceLocation::new(3, 3));
+        assert_eq!(tok.loc, FilePos::new(3, 3));
         Ok(())
     }
 
@@ -324,7 +324,7 @@ mod tests {
 
         let tok = lexer.next_token()?;
         assert_eq!(tok.kind, TokenKind::EOF);
-        assert_eq!(tok.loc, SourceLocation::new(4, 3));
+        assert_eq!(tok.loc, FilePos::new(4, 3));
         Ok(())
     }
 
@@ -333,10 +333,10 @@ mod tests {
         let src = String::from("func include for");
         let mut lexer = Lexer::new(&src);
         let expected_toks = vec![
-            Token::new(TokenKind::Kwd(KwdKind::Func), SourceLocation::new(1, 1)),
-            Token::new(TokenKind::Kwd(KwdKind::Include), SourceLocation::new(1, 6)),
-            Token::new(TokenKind::Kwd(KwdKind::For), SourceLocation::new(1, 14)),
-            Token::new(TokenKind::EOF, SourceLocation::new(1, 17)),
+            Token::new(TokenKind::Kwd(KwdKind::Func), FilePos::new(1, 1)),
+            Token::new(TokenKind::Kwd(KwdKind::Include), FilePos::new(1, 6)),
+            Token::new(TokenKind::Kwd(KwdKind::For), FilePos::new(1, 14)),
+            Token::new(TokenKind::EOF, FilePos::new(1, 17)),
         ];
 
         for expected in expected_toks {
@@ -353,7 +353,7 @@ mod tests {
         let src = String::from("\"Hello, world!");
         let mut lexer = Lexer::new(&src);
         let result = lexer.next_token();
-        let expected = CortexError::syntax_err("unterminated string literal", SourceLocation::new(1, 1));
+        let expected = CortexError::syntax_err("unterminated string literal", FilePos::new(1, 1));
 
         assert!(result.is_err());
         assert_eq!(result.err().unwrap(), expected);
@@ -363,25 +363,25 @@ mod tests {
     fn closed_braces() -> Result<(), CortexError> {
         let src = String::from("([\n\n\n()]) [] {\n{{[{}]}\n}\n}");
         let expected_toks = vec![
-            Token::new(TokenKind::BraceOpen(BraceKind::Paren), SourceLocation::new(1, 1)),
-            Token::new(TokenKind::BraceOpen(BraceKind::Square), SourceLocation::new(1, 2)),
-            Token::new(TokenKind::BraceOpen(BraceKind::Paren), SourceLocation::new(4, 1)),
-            Token::new(TokenKind::BraceClosed(BraceKind::Paren), SourceLocation::new(4, 2)),
-            Token::new(TokenKind::BraceClosed(BraceKind::Square), SourceLocation::new(4, 3)),
-            Token::new(TokenKind::BraceClosed(BraceKind::Paren), SourceLocation::new(4, 4)),
-            Token::new(TokenKind::BraceOpen(BraceKind::Square), SourceLocation::new(4, 6)),
-            Token::new(TokenKind::BraceClosed(BraceKind::Square), SourceLocation::new(4, 7)),
-            Token::new(TokenKind::BraceOpen(BraceKind::Curly), SourceLocation::new(4, 9)),
-            Token::new(TokenKind::BraceOpen(BraceKind::Curly), SourceLocation::new(5, 1)),
-            Token::new(TokenKind::BraceOpen(BraceKind::Curly), SourceLocation::new(5, 2)),
-            Token::new(TokenKind::BraceOpen(BraceKind::Square), SourceLocation::new(5, 3)),
-            Token::new(TokenKind::BraceOpen(BraceKind::Curly), SourceLocation::new(5, 4)),
-            Token::new(TokenKind::BraceClosed(BraceKind::Curly), SourceLocation::new(5, 5)),
-            Token::new(TokenKind::BraceClosed(BraceKind::Square), SourceLocation::new(5, 6)),
-            Token::new(TokenKind::BraceClosed(BraceKind::Curly), SourceLocation::new(5, 7)),
-            Token::new(TokenKind::BraceClosed(BraceKind::Curly), SourceLocation::new(6, 1)),
-            Token::new(TokenKind::BraceClosed(BraceKind::Curly), SourceLocation::new(7, 1)),
-            Token::eof(SourceLocation::new(7,2)),
+            Token::new(TokenKind::BraceOpen(BraceKind::Paren), FilePos::new(1, 1)),
+            Token::new(TokenKind::BraceOpen(BraceKind::Square), FilePos::new(1, 2)),
+            Token::new(TokenKind::BraceOpen(BraceKind::Paren), FilePos::new(4, 1)),
+            Token::new(TokenKind::BraceClosed(BraceKind::Paren), FilePos::new(4, 2)),
+            Token::new(TokenKind::BraceClosed(BraceKind::Square), FilePos::new(4, 3)),
+            Token::new(TokenKind::BraceClosed(BraceKind::Paren), FilePos::new(4, 4)),
+            Token::new(TokenKind::BraceOpen(BraceKind::Square), FilePos::new(4, 6)),
+            Token::new(TokenKind::BraceClosed(BraceKind::Square), FilePos::new(4, 7)),
+            Token::new(TokenKind::BraceOpen(BraceKind::Curly), FilePos::new(4, 9)),
+            Token::new(TokenKind::BraceOpen(BraceKind::Curly), FilePos::new(5, 1)),
+            Token::new(TokenKind::BraceOpen(BraceKind::Curly), FilePos::new(5, 2)),
+            Token::new(TokenKind::BraceOpen(BraceKind::Square), FilePos::new(5, 3)),
+            Token::new(TokenKind::BraceOpen(BraceKind::Curly), FilePos::new(5, 4)),
+            Token::new(TokenKind::BraceClosed(BraceKind::Curly), FilePos::new(5, 5)),
+            Token::new(TokenKind::BraceClosed(BraceKind::Square), FilePos::new(5, 6)),
+            Token::new(TokenKind::BraceClosed(BraceKind::Curly), FilePos::new(5, 7)),
+            Token::new(TokenKind::BraceClosed(BraceKind::Curly), FilePos::new(6, 1)),
+            Token::new(TokenKind::BraceClosed(BraceKind::Curly), FilePos::new(7, 1)),
+            Token::eof(FilePos::new(7,2)),
         ];
         let mut lexer = Lexer::new(&src);
 
@@ -402,7 +402,7 @@ mod tests {
             assert!(lexer.next_token().is_ok());
         }
 
-        let expected = CortexError::syntax_err("unclosed '{'", SourceLocation::new(2, 1));
+        let expected = CortexError::syntax_err("unclosed '{'", FilePos::new(2, 1));
         let result = lexer.next_token();
 
         assert!(result.is_err());
@@ -417,7 +417,7 @@ mod tests {
         // no need to loop, first next_token is only call that should succeed
         assert!(lexer.next_token().is_ok());
 
-        let expected = CortexError::syntax_err("unopened '}'", SourceLocation::new(2, 1));
+        let expected = CortexError::syntax_err("unopened '}'", FilePos::new(2, 1));
         let result = lexer.next_token();
 
         assert!(result.is_err());

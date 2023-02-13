@@ -1,7 +1,7 @@
 use std::fmt;
 use std::convert::From;
 
-use crate::io::file::SourceLocation;
+use crate::io::file::FilePos;
 
 pub trait MaybeFrom<T>: Sized {
     fn maybe_from(value: T) -> Option<Self>;
@@ -18,18 +18,18 @@ pub trait Literal {
 #[derive(Clone)]
 pub struct Token {
     pub kind: TokenKind,
-    pub loc: SourceLocation,
+    pub loc: FilePos,
 }
 
 impl Token {
-    pub fn new(kind: TokenKind, loc: SourceLocation) -> Token {
+    pub fn new(kind: TokenKind, loc: FilePos) -> Token {
         Token {
             kind,
             loc,
         }
     }
 
-    pub fn eof(loc: SourceLocation) -> Token {
+    pub fn eof(loc: FilePos) -> Token {
         Token {
             kind: TokenKind::EOF,
             loc,
@@ -276,16 +276,16 @@ mod tests {
     fn closes() {
         let compat_toks = vec![
             (
-                Token::new(TokenKind::BraceOpen(BraceKind::Paren), SourceLocation::default()),
-                Token::new(TokenKind::BraceClosed(BraceKind::Paren), SourceLocation::default()),
+                Token::new(TokenKind::BraceOpen(BraceKind::Paren), FilePos::default()),
+                Token::new(TokenKind::BraceClosed(BraceKind::Paren), FilePos::default()),
             ),
             (
-                Token::new(TokenKind::BraceOpen(BraceKind::Curly), SourceLocation::default()),
-                Token::new(TokenKind::BraceClosed(BraceKind::Curly), SourceLocation::default()),
+                Token::new(TokenKind::BraceOpen(BraceKind::Curly), FilePos::default()),
+                Token::new(TokenKind::BraceClosed(BraceKind::Curly), FilePos::default()),
             ),
             (
-                Token::new(TokenKind::BraceOpen(BraceKind::Square), SourceLocation::default()),
-                Token::new(TokenKind::BraceClosed(BraceKind::Square), SourceLocation::default()),
+                Token::new(TokenKind::BraceOpen(BraceKind::Square), FilePos::default()),
+                Token::new(TokenKind::BraceClosed(BraceKind::Square), FilePos::default()),
             ),
         ];
 
@@ -295,16 +295,16 @@ mod tests {
 
         let incompat_toks = vec![
             (
-                Token::new(TokenKind::BraceOpen(BraceKind::Paren), SourceLocation::default()),
-                Token::new(TokenKind::BraceOpen(BraceKind::Paren), SourceLocation::default()),
+                Token::new(TokenKind::BraceOpen(BraceKind::Paren), FilePos::default()),
+                Token::new(TokenKind::BraceOpen(BraceKind::Paren), FilePos::default()),
             ),
             (
-                Token::new(TokenKind::BraceOpen(BraceKind::Curly), SourceLocation::default()),
-                Token::new(TokenKind::BraceClosed(BraceKind::Paren), SourceLocation::default()),
+                Token::new(TokenKind::BraceOpen(BraceKind::Curly), FilePos::default()),
+                Token::new(TokenKind::BraceClosed(BraceKind::Paren), FilePos::default()),
             ),
             (
-                Token::new(TokenKind::BraceOpen(BraceKind::Square), SourceLocation::default()),
-                Token::new(TokenKind::BraceClosed(BraceKind::Curly), SourceLocation::default()),
+                Token::new(TokenKind::BraceOpen(BraceKind::Square), FilePos::default()),
+                Token::new(TokenKind::BraceClosed(BraceKind::Curly), FilePos::default()),
             ),
         ];
 

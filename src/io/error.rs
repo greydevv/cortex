@@ -4,17 +4,17 @@ use std::convert::From;
 
 use colored::Colorize;
 
-use crate::io::file::{ FileHandler, SourceLocation };
+use crate::io::file::{ FileHandler, FilePos };
 use crate::lexer::token::Token;
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum CortexError {
-    SyntaxError(String, SourceLocation, Option<String>),
+    SyntaxError(String, FilePos, Option<String>),
     FileIOError(String),
 }
 
 impl CortexError {
-    pub fn syntax_err(msg: &str, loc: SourceLocation) -> CortexError {
+    pub fn syntax_err(msg: &str, loc: FilePos) -> CortexError {
         CortexError::SyntaxError(String::from(msg), loc, None)
     }
 
@@ -22,7 +22,7 @@ impl CortexError {
         CortexError::FileIOError(String::from(msg))
     }
 
-    pub fn invalid_integer_literal(literal: &String, loc: SourceLocation) -> CortexError {
+    pub fn invalid_integer_literal(literal: &String, loc: FilePos) -> CortexError {
         CortexError::SyntaxError(
             format!("'{}' is not a valid integer literal", literal),
             loc,
@@ -30,7 +30,7 @@ impl CortexError {
         )
     }
 
-    pub fn expected_bin_op(literal: &String, loc: SourceLocation) -> CortexError {
+    pub fn expected_bin_op(literal: &String, loc: FilePos) -> CortexError {
         CortexError::SyntaxError(
             format!("'{}' is not a binary operator", literal),
             loc,
@@ -49,7 +49,7 @@ impl CortexError {
     }
 }
 
-fn underline_err(loc: &SourceLocation, fh: &FileHandler) -> String {
+fn underline_err(loc: &FilePos, fh: &FileHandler) -> String {
     let mut lines = fh.contents().lines();
     let line_nr = loc.line.to_string();
     let indent = " ".repeat(line_nr.len() + 1);

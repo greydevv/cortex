@@ -34,26 +34,32 @@ impl FileHandler {
     }
 }
 
+#[derive(PartialEq, Debug, Clone)]
+pub struct Span {
+    beg: FilePos,
+    end: FilePos,
+}
+
 #[derive(PartialEq, Debug, Copy, Clone)]
-pub struct SourceLocation {
+pub struct FilePos {
     pub line: usize,
     pub col: usize,
 }
 
-impl SourceLocation {
-    pub fn new(line: usize, col: usize) -> SourceLocation {
-        SourceLocation {
+impl FilePos {
+    pub fn new(line: usize, col: usize) -> FilePos {
+        FilePos {
             line,
             col,
         }
     }
 
-    pub fn default() -> SourceLocation {
-        SourceLocation::new(1, 1)
+    pub fn default() -> FilePos {
+        FilePos::new(1, 1)
     }
 }
 
-impl fmt::Display for SourceLocation {
+impl fmt::Display for FilePos {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
       write!(f, "(line {}, col {})", self.line, self.col)
     }
