@@ -8,8 +8,10 @@ use crate::lexer::token::{
     DelimKind,
     BraceKind,
     OpKind,
+    TyKind,
     KwdKind,
     Literal,
+    MaybeFrom,
 };
 
 pub mod token;
@@ -91,8 +93,10 @@ impl<'a> Lexer<'_> {
         }
 
         // return a keyword token if the string was found to be a built-in keyword
-        if let Some(kwd_kind) = KwdKind::from_string(&val) {
+        if let Some(kwd_kind) = KwdKind::maybe_from(&val) {
             return Token::new(TokenKind::Kwd(kwd_kind), loc);
+        } else if let Some(ty_kind) = TyKind::maybe_from(&val) {
+            return Token::new(TokenKind::Ty(ty_kind), loc);
         } else {
             return Token::new(TokenKind::Id(val), loc);
         }
@@ -359,24 +363,24 @@ mod tests {
     fn closed_braces() -> Result<(), CortexError> {
         let src = String::from("([\n\n\n()]) [] {\n{{[{}]}\n}\n}");
         let expected_toks = vec![
-            Token::new(TokenKind::Brace(BraceKind::Paren, BraceFace::Open), SourceLocation::new(1, 1)),
-            Token::new(TokenKind::Brace(BraceKind::Square, BraceFace::Open), SourceLocation::new(1, 2)),
-            Token::new(TokenKind::Brace(BraceKind::Paren, BraceFace::Open), SourceLocation::new(4, 1)),
-            Token::new(TokenKind::Brace(BraceKind::Paren, BraceFace::Closed), SourceLocation::new(4, 2)),
-            Token::new(TokenKind::Brace(BraceKind::Square, BraceFace::Closed), SourceLocation::new(4, 3)),
-            Token::new(TokenKind::Brace(BraceKind::Paren, BraceFace::Closed), SourceLocation::new(4, 4)),
-            Token::new(TokenKind::Brace(BraceKind::Square, BraceFace::Open), SourceLocation::new(4, 6)),
-            Token::new(TokenKind::Brace(BraceKind::Square, BraceFace::Closed), SourceLocation::new(4, 7)),
-            Token::new(TokenKind::Brace(BraceKind::Curly, BraceFace::Open), SourceLocation::new(4, 9)),
-            Token::new(TokenKind::Brace(BraceKind::Curly, BraceFace::Open), SourceLocation::new(5, 1)),
-            Token::new(TokenKind::Brace(BraceKind::Curly, BraceFace::Open), SourceLocation::new(5, 2)),
-            Token::new(TokenKind::Brace(BraceKind::Square, BraceFace::Open), SourceLocation::new(5, 3)),
-            Token::new(TokenKind::Brace(BraceKind::Curly, BraceFace::Open), SourceLocation::new(5, 4)),
-            Token::new(TokenKind::Brace(BraceKind::Curly, BraceFace::Closed), SourceLocation::new(5, 5)),
-            Token::new(TokenKind::Brace(BraceKind::Square, BraceFace::Closed), SourceLocation::new(5, 6)),
-            Token::new(TokenKind::Brace(BraceKind::Curly, BraceFace::Closed), SourceLocation::new(5, 7)),
-            Token::new(TokenKind::Brace(BraceKind::Curly, BraceFace::Closed), SourceLocation::new(6, 1)),
-            Token::new(TokenKind::Brace(BraceKind::Curly, BraceFace::Closed), SourceLocation::new(7, 1)),
+            Token::new(TokenKind::BraceOpen(BraceKind::Paren), SourceLocation::new(1, 1)),
+            Token::new(TokenKind::BraceOpen(BraceKind::Square), SourceLocation::new(1, 2)),
+            Token::new(TokenKind::BraceOpen(BraceKind::Paren), SourceLocation::new(4, 1)),
+            Token::new(TokenKind::BraceClosed(BraceKind::Paren), SourceLocation::new(4, 2)),
+            Token::new(TokenKind::BraceClosed(BraceKind::Square), SourceLocation::new(4, 3)),
+            Token::new(TokenKind::BraceClosed(BraceKind::Paren), SourceLocation::new(4, 4)),
+            Token::new(TokenKind::BraceOpen(BraceKind::Square), SourceLocation::new(4, 6)),
+            Token::new(TokenKind::BraceClosed(BraceKind::Square), SourceLocation::new(4, 7)),
+            Token::new(TokenKind::BraceOpen(BraceKind::Curly), SourceLocation::new(4, 9)),
+            Token::new(TokenKind::BraceOpen(BraceKind::Curly), SourceLocation::new(5, 1)),
+            Token::new(TokenKind::BraceOpen(BraceKind::Curly), SourceLocation::new(5, 2)),
+            Token::new(TokenKind::BraceOpen(BraceKind::Square), SourceLocation::new(5, 3)),
+            Token::new(TokenKind::BraceOpen(BraceKind::Curly), SourceLocation::new(5, 4)),
+            Token::new(TokenKind::BraceClosed(BraceKind::Curly), SourceLocation::new(5, 5)),
+            Token::new(TokenKind::BraceClosed(BraceKind::Square), SourceLocation::new(5, 6)),
+            Token::new(TokenKind::BraceClosed(BraceKind::Curly), SourceLocation::new(5, 7)),
+            Token::new(TokenKind::BraceClosed(BraceKind::Curly), SourceLocation::new(6, 1)),
+            Token::new(TokenKind::BraceClosed(BraceKind::Curly), SourceLocation::new(7, 1)),
             Token::eof(SourceLocation::new(7,2)),
         ];
         let mut lexer = Lexer::new(&src);

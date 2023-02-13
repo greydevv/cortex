@@ -3,6 +3,10 @@ use std::convert::From;
 
 use crate::io::file::SourceLocation;
 
+pub trait MaybeFrom<T>: Sized {
+    fn maybe_from(value: T) -> Option<Self>;
+}
+
 pub trait Literal {
     fn literal(&self) -> String;
 
@@ -46,6 +50,10 @@ impl Token {
     pub fn is_eof(&self) -> bool {
         self.kind == TokenKind::EOF
     }
+
+    pub fn value(&self) -> String {
+        self.kind.literal()
+    }
 }
 
 impl fmt::Display for Token {
@@ -64,6 +72,7 @@ pub enum TokenKind {
     BraceOpen(BraceKind),
     BraceClosed(BraceKind),
     Op(OpKind),
+    Ty(TyKind),
     Kwd(KwdKind),
     EOF,
     Unknown(char),
@@ -90,6 +99,7 @@ impl Literal for TokenKind {
                     BraceKind::Square => String::from("]"),
                 },
             TokenKind::Op(op_kind) => op_kind.literal(),
+            TokenKind::Ty(ty_kind) => ty_kind.literal(),
             TokenKind::Kwd(kwd_kind) => kwd_kind.literal(),
             TokenKind::EOF => String::from("\\0"),
             TokenKind::Unknown(c) => c.to_string(),
@@ -200,6 +210,30 @@ pub enum OpAssoc {
     Right
 }
 
+#[derive(PartialEq, Clone, Debug, strum_macros::Display)]
+pub enum TyKind {
+    Int(usize),
+    Void,
+}
+
+impl MaybeFrom<&String> for TyKind {
+    fn maybe_from(value: &String) -> Option<TyKind> {
+        match value.as_str() {
+            "i32" => Some(TyKind::Int(32)),
+            _ => None,
+        }
+    }
+}
+
+impl Literal for TyKind {
+    fn literal(&self) -> String {
+        match &self {
+            TyKind::Int(size) => format!("i{}", size),
+            TyKind::Void => String::from("void"),
+        }
+    }
+}
+
 #[derive(PartialEq, Debug, Clone, strum_macros::Display)]
 pub enum KwdKind {
     Func,
@@ -209,8 +243,8 @@ pub enum KwdKind {
     Ret,
 }
 
-impl KwdKind {
-    pub fn from_string(value: &String) -> Option<KwdKind> {
+impl MaybeFrom<&String> for KwdKind {
+    fn maybe_from(value: &String) -> Option<KwdKind> {
         match value.as_str() {
             "func" => Some(KwdKind::Func),
             "include" => Some(KwdKind::Include),
@@ -242,16 +276,16 @@ mod tests {
     fn closes() {
         let compat_toks = vec![
             (
-                Token::new(TokenKind::Brace(BraceKind::Paren, BraceFace::Open), SourceLocation::default()),
-                Token::new(TokenKind::Brace(BraceKind::Paren, BraceFace::Closed), SourceLocation::default()),
+                Token::new(TokenKind::BraceOpen(BraceKind::Paren), SourceLocation::default()),
+                Token::new(TokenKind::BraceClosed(BraceKind::Paren), SourceLocation::default()),
             ),
             (
-                Token::new(TokenKind::Brace(BraceKind::Curly, BraceFace::Open), SourceLocation::default()),
-                Token::new(TokenKind::Brace(BraceKind::Curly, BraceFace::Closed), SourceLocation::default()),
+                Token::new(TokenKind::BraceOpen(BraceKind::Curly), SourceLocation::default()),
+                Token::new(TokenKind::BraceClosed(BraceKind::Curly), SourceLocation::default()),
             ),
             (
-                Token::new(TokenKind::Brace(BraceKind::Square, BraceFace::Open), SourceLocation::default()),
-                Token::new(TokenKind::Brace(BraceKind::Square, BraceFace::Closed), SourceLocation::default()),
+                Token::new(TokenKind::BraceOpen(BraceKind::Square), SourceLocation::default()),
+                Token::new(TokenKind::BraceClosed(BraceKind::Square), SourceLocation::default()),
             ),
         ];
 
@@ -261,16 +295,16 @@ mod tests {
 
         let incompat_toks = vec![
             (
-                Token::new(TokenKind::Brace(BraceKind::Paren, BraceFace::Open), SourceLocation::default()),
-                Token::new(TokenKind::Brace(BraceKind::Paren, BraceFace::Open), SourceLocation::default()),
+                Token::new(TokenKind::BraceOpen(BraceKind::Paren), SourceLocation::default()),
+                Token::new(TokenKind::BraceOpen(BraceKind::Paren), SourceLocation::default()),
             ),
             (
-                Token::new(TokenKind::Brace(BraceKind::Curly, BraceFace::Open), SourceLocation::default()),
-                Token::new(TokenKind::Brace(BraceKind::Paren, BraceFace::Closed), SourceLocation::default()),
+                Token::new(TokenKind::BraceOpen(BraceKind::Curly), SourceLocation::default()),
+                Token::new(TokenKind::BraceClosed(BraceKind::Paren), SourceLocation::default()),
             ),
             (
-                Token::new(TokenKind::Brace(BraceKind::Square, BraceFace::Open), SourceLocation::default()),
-                Token::new(TokenKind::Brace(BraceKind::Curly, BraceFace::Closed), SourceLocation::default()),
+                Token::new(TokenKind::BraceOpen(BraceKind::Square), SourceLocation::default()),
+                Token::new(TokenKind::BraceClosed(BraceKind::Curly), SourceLocation::default()),
             ),
         ];
 
