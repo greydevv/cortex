@@ -154,7 +154,7 @@ impl<'a> Parser<'_> {
     fn expect_id(&mut self, with_msg: String) -> Result<(), CortexError> {
         self.eat(TokenKind::Id(String::new())).map_err(|err| {
             match err {
-                CortexError::SyntaxError(_, loc, info) => CortexError::SyntaxError(with_msg, loc, info),
+                CortexError::SyntaxError(_, span, info) => CortexError::SyntaxError(with_msg, span, info),
                 _ => err
             }
         })

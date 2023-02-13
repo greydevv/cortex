@@ -14,26 +14,26 @@ pub enum CortexError {
 }
 
 impl CortexError {
-    pub fn syntax_err(msg: &str, loc: FileSpan) -> CortexError {
-        CortexError::SyntaxError(String::from(msg), loc, None)
+    pub fn syntax_err(msg: &str, span: FileSpan) -> CortexError {
+        CortexError::SyntaxError(String::from(msg), span, None)
     }
 
     pub fn file_io_err(msg: &str) -> CortexError {
         CortexError::FileIOError(String::from(msg))
     }
 
-    pub fn invalid_integer_literal(literal: &String, loc: FileSpan) -> CortexError {
+    pub fn invalid_integer_literal(literal: &String, span: FileSpan) -> CortexError {
         CortexError::SyntaxError(
             format!("'{}' is not a valid integer literal", literal),
-            loc,
+            span,
             Some(String::from("Integer literals are expressed as a sequence of digits, e.g., \"23\" or \"921\"."))
         )
     }
 
-    pub fn expected_bin_op(literal: &String, loc: FileSpan) -> CortexError {
+    pub fn expected_bin_op(literal: &String, span: FileSpan) -> CortexError {
         CortexError::SyntaxError(
             format!("'{}' is not a binary operator", literal),
-            loc,
+            span,
             None,
         )
     }
@@ -66,14 +66,14 @@ fn underline_err(span: &FileSpan, fh: &FileHandler) -> String {
 
 impl CortexError {
     pub fn display(&self, fh: &FileHandler) {
-        let (err_kind, err_msg, err_loc, err_info) = match self {
-            CortexError::SyntaxError(msg, loc, info) => ("SyntaxError", msg, Some(loc), info.clone()),
+        let (err_kind, err_msg, err_span, err_info) = match self {
+            CortexError::SyntaxError(msg, span, info) => ("SyntaxError", msg, Some(span), info.clone()),
             CortexError::FileIOError(msg) => ("FileIOError", msg, None, None)
         };
         
         eprintln!("{}: {}", err_kind.red().bold(), err_msg);
-        match err_loc {
-            Some(loc) => eprintln!("{}", underline_err(&loc, fh)),
+        match err_span {
+            Some(span) => eprintln!("{}", underline_err(&span, fh)),
             None => ()
         }
         match err_info {

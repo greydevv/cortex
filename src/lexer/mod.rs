@@ -18,7 +18,7 @@ pub mod token;
 
 pub struct Lexer<'a> {
     c: char,
-    loc: FilePos,
+    pos: FilePos,
     brace_stack: Vec<Token>,
     chars: Peekable<std::str::Chars<'a>>,
 }
@@ -33,7 +33,7 @@ impl<'a> Lexer<'_> {
         Lexer {
             c,
             brace_stack: Vec::new(),
-            loc: FilePos::default(),
+            pos: FilePos::default(),
             chars,
         }
     }
@@ -45,10 +45,10 @@ impl<'a> Lexer<'_> {
         match self.c {
             '\0' => (),
             '\n' => {
-                self.loc.line += 1;
-                self.loc.col = 1;
+                self.pos.line += 1;
+                self.pos.col = 1;
             },
-            _ => self.loc.col += 1,
+            _ => self.pos.col += 1,
         }
         self.c = match self.chars.next() {
             Some(c) => c,
@@ -71,7 +71,7 @@ impl<'a> Lexer<'_> {
             // closed at some point
             match self.brace_stack.last() {
                 Some(unclosed_brace) => Err(CortexError::unclosed_brace(&unclosed_brace)),
-                None => Ok(Token::eof(self.loc))
+                None => Ok(Token::eof(self.pos))
             }
         } else if self.c.is_alphabetic() {
             Ok(self.lex_alpha())
@@ -86,14 +86,14 @@ impl<'a> Lexer<'_> {
 
     fn lex_alpha(&mut self) -> Token {
         let mut val = String::new();
-        let beg_pos = self.loc;
+        let beg_pos = self.pos;
         while self.c.is_alphanumeric() || self.c == '_' {
             val.push(self.c);
             self.next_char();
         }
 
         // return a keyword token if the string was found to be a built-in keyword
-        let span = FileSpan::new(beg_pos, self.loc);
+        let span = FileSpan::new(beg_pos, self.pos);
         if let Some(kwd_kind) = KwdKind::maybe_from(&val) {
             return Token::new(TokenKind::Kwd(kwd_kind), span);
         } else if let Some(ty_kind) = TyKind::maybe_from(&val) {
@@ -133,13 +133,13 @@ impl<'a> Lexer<'_> {
         // initializing with current char before the loop allows a negative sign to appear before a
         // numeric literal
         let mut val = String::from(self.c);
-        let beg_pos = self.loc;
+        let beg_pos = self.pos;
         self.next_char();
         while self.c.is_alphanumeric() {
             val.push(self.c);
             self.next_char();
         }
-        let span = FileSpan::new(beg_pos, self.loc);
+        let span = FileSpan::new(beg_pos, self.pos);
         match val.parse::<i32>() {
             Ok(n) => Ok(Token::new(TokenKind::Num(n), span)),
             Err(_) => Err(CortexError::invalid_integer_literal(&val, span))
@@ -147,7 +147,7 @@ impl<'a> Lexer<'_> {
     }
 
     fn lex_other(&mut self) -> Result<Token, CortexError> {
-        let beg_pos = self.loc;
+        let beg_pos = self.pos;
         let kind = match self.c {
             '.' => TokenKind::Delim(DelimKind::Period),
             ',' => TokenKind::Delim(DelimKind::Comma),
@@ -189,7 +189,7 @@ impl<'a> Lexer<'_> {
             self.next_char();
         }
 
-        let span = FileSpan::new(beg_pos, self.loc);
+        let span = FileSpan::new(beg_pos, self.pos);
 
         let tok = Token::new(kind, span);
         match tok.kind {
@@ -230,9 +230,7 @@ impl<'a> Lexer<'_> {
 
     fn lex_string(&mut self) -> Result<Token, CortexError> {
         let mut val = String::new();
-        // TODO: when computing length of token for future implementation of SourceLocation, need
-        // to make sure that the quotes are included in final token length.
-        let beg_pos = self.loc;
+        let beg_pos = self.pos;
 
         // eat opening quote
         self.next_char();
@@ -240,12 +238,12 @@ impl<'a> Lexer<'_> {
         loop {
             match self.c {
                 '\0' => {
-                    return Err(CortexError::syntax_err("unterminated string literal", FileSpan::new(beg_pos, self.loc)));
+                    return Err(CortexError::syntax_err("unterminated string literal", FileSpan::new(beg_pos, self.pos)));
                 },
                 '"' => {
                     // eat closing quote
                     self.next_char();
-                    let span = FileSpan::new(beg_pos, self.loc);
+                    let span = FileSpan::new(beg_pos, self.pos);
                     return Ok(Token::new(
                         TokenKind::String(val),
                         span,
