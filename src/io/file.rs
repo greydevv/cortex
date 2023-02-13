@@ -34,10 +34,41 @@ impl FileHandler {
     }
 }
 
-#[derive(PartialEq, Debug, Clone)]
-pub struct Span {
-    beg: FilePos,
-    end: FilePos,
+#[derive(PartialEq, Debug, Clone, Copy)]
+pub struct FileSpan {
+    pub beg: FilePos,
+    pub end: FilePos,
+}
+
+impl FileSpan {
+    pub fn len(&self) -> usize {
+        // TODO: this will not work for multiline spans
+        self.end.col - self.beg.col
+    }
+
+    pub fn new(beg: FilePos, end: FilePos) -> FileSpan {
+        FileSpan {
+            beg,
+            end,
+        }
+    }
+
+    pub fn one(beg: FilePos) -> FileSpan {
+        FileSpan {
+            beg,
+            end: FilePos::new(beg.line, beg.col+1)
+        }
+    }
+
+    pub fn default() -> FileSpan {
+        FileSpan::new(FilePos::new(1, 1), FilePos::new(1, 2))
+    }
+}
+
+impl fmt::Display for FileSpan {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+      write!(f, "{} -> {}", self.beg, self.end)
+    }
 }
 
 #[derive(PartialEq, Debug, Copy, Clone)]

@@ -75,7 +75,7 @@ impl<'a> Parser<'_> {
             TokenKind::BraceOpen(BraceKind::Curly) => {
                 TyKind::Void
             },
-            _ => return Err(CortexError::SyntaxError(format!("expected either a return type or the beginning of a function body but found '{}' instead", self.tok.value()), self.tok.loc, None))
+            _ => return Err(CortexError::SyntaxError(format!("expected either a return type or the beginning of a function body but found '{}' instead", self.tok.value()), self.tok.span, None))
         };
         self.eat(TokenKind::BraceOpen(BraceKind::Curly))?;
         let body = self.parse()?;
@@ -101,7 +101,7 @@ impl<'a> Parser<'_> {
                 self.eat(TokenKind::BraceClosed(BraceKind::Paren))?;
                 return Ok(expr);
             },
-            _ => return Err(CortexError::SyntaxError(format!("unknown operand in binary expression: {}", self.tok), self.tok.loc, None))
+            _ => return Err(CortexError::SyntaxError(format!("unknown operand in binary expression: {}", self.tok), self.tok.span, None))
         };
         self.advance()?;
         Ok(node)
@@ -140,7 +140,7 @@ impl<'a> Parser<'_> {
                         rhs: Box::new(rhs),
                     }
                 },
-                None => return Err(CortexError::expected_bin_op(&self.tok.value(), self.tok.loc)),
+                None => return Err(CortexError::expected_bin_op(&self.tok.value(), self.tok.span)),
             }
         }
         Ok(lhs)
@@ -165,7 +165,7 @@ impl<'a> Parser<'_> {
             self.advance()?;
             Ok(ty_kind)
         } else {
-            Err(CortexError::SyntaxError(format!("expected type but got '{}' instead", self.tok.value()), self.tok.loc, None))
+            Err(CortexError::SyntaxError(format!("expected type but got '{}' instead", self.tok.value()), self.tok.span, None))
         }
     }
 
@@ -176,7 +176,7 @@ impl<'a> Parser<'_> {
             _ => self.tok.kind == expected_kind
         };
         if !tok_expected {
-            return Err(CortexError::SyntaxError(format!("expected '{}' but got '{}'", expected_kind.literal(), self.tok.value()), self.tok.loc, None));
+            return Err(CortexError::SyntaxError(format!("expected '{}' but got '{}'", expected_kind.literal(), self.tok.value()), self.tok.span, None));
         }
         self.advance()?;
         Ok(())

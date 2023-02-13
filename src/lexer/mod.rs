@@ -1,6 +1,6 @@
 use std::iter::Peekable;
 
-use crate::io::file::FilePos;
+use crate::io::file::{ FilePos, FileSpan };
 use crate::io::error::CortexError;
 use crate::lexer::token::{
     Token,
@@ -86,19 +86,20 @@ impl<'a> Lexer<'_> {
 
     fn lex_alpha(&mut self) -> Token {
         let mut val = String::new();
-        let loc = self.loc;
+        let beg_pos = self.loc;
         while self.c.is_alphanumeric() || self.c == '_' {
             val.push(self.c);
             self.next_char();
         }
 
         // return a keyword token if the string was found to be a built-in keyword
+        let span = FileSpan::new(beg_pos, self.loc);
         if let Some(kwd_kind) = KwdKind::maybe_from(&val) {
-            return Token::new(TokenKind::Kwd(kwd_kind), loc);
+            return Token::new(TokenKind::Kwd(kwd_kind), span);
         } else if let Some(ty_kind) = TyKind::maybe_from(&val) {
-            return Token::new(TokenKind::Ty(ty_kind), loc);
+            return Token::new(TokenKind::Ty(ty_kind), span);
         } else {
-            return Token::new(TokenKind::Id(val), loc);
+            return Token::new(TokenKind::Id(val), span);
         }
     }
 
@@ -132,20 +133,21 @@ impl<'a> Lexer<'_> {
         // initializing with current char before the loop allows a negative sign to appear before a
         // numeric literal
         let mut val = String::from(self.c);
-        let loc = self.loc;
+        let beg_pos = self.loc;
         self.next_char();
         while self.c.is_alphanumeric() {
             val.push(self.c);
             self.next_char();
         }
+        let span = FileSpan::new(beg_pos, self.loc);
         match val.parse::<i32>() {
-            Ok(n) => Ok(Token::new(TokenKind::Num(n), loc)),
-            Err(_) => Err(CortexError::invalid_integer_literal(&val, loc))
+            Ok(n) => Ok(Token::new(TokenKind::Num(n), span)),
+            Err(_) => Err(CortexError::invalid_integer_literal(&val, span))
         }
     }
 
     fn lex_other(&mut self) -> Result<Token, CortexError> {
-        let loc = self.loc;
+        let beg_pos = self.loc;
         let kind = match self.c {
             '.' => TokenKind::Delim(DelimKind::Period),
             ',' => TokenKind::Delim(DelimKind::Comma),
@@ -187,7 +189,9 @@ impl<'a> Lexer<'_> {
             self.next_char();
         }
 
-        let tok = Token::new(kind, loc);
+        let span = FileSpan::new(beg_pos, self.loc);
+
+        let tok = Token::new(kind, span);
         match tok.kind {
             TokenKind::BraceOpen(_) | TokenKind::BraceClosed(_) => self.update_balancing_state(tok.clone())?,
             _ => ()
@@ -228,7 +232,7 @@ impl<'a> Lexer<'_> {
         let mut val = String::new();
         // TODO: when computing length of token for future implementation of SourceLocation, need
         // to make sure that the quotes are included in final token length.
-        let loc = self.loc.clone();
+        let beg_pos = self.loc;
 
         // eat opening quote
         self.next_char();
@@ -236,14 +240,15 @@ impl<'a> Lexer<'_> {
         loop {
             match self.c {
                 '\0' => {
-                    return Err(CortexError::syntax_err("unterminated string literal", loc));
+                    return Err(CortexError::syntax_err("unterminated string literal", FileSpan::new(beg_pos, self.loc)));
                 },
                 '"' => {
                     // eat closing quote
                     self.next_char();
+                    let span = FileSpan::new(beg_pos, self.loc);
                     return Ok(Token::new(
                         TokenKind::String(val),
-                        loc,
+                        span,
                     ));
                 },
                 _ => val.push(self.c)
@@ -290,7 +295,7 @@ mod tests {
 
         let tok = lexer.next_token()?;
         assert_eq!(tok.kind, TokenKind::EOF);
-        assert_eq!(tok.loc, FilePos::new(1, 1));
+        assert_eq!(tok.span, FileSpan::one(FilePos::new(1, 1)));
         Ok(())
     }
 
@@ -301,7 +306,7 @@ mod tests {
 
         let tok = lexer.next_token()?;
         assert_eq!(tok.kind, TokenKind::EOF);
-        assert_eq!(tok.loc, FilePos::new(3, 1));
+        assert_eq!(tok.span, FileSpan::one(FilePos::new(3, 1)));
         Ok(())
     }
 
@@ -313,7 +318,7 @@ mod tests {
         lexer.next_token()?;
         let tok = lexer.next_token()?;
         assert_eq!(tok.kind, TokenKind::EOF);
-        assert_eq!(tok.loc, FilePos::new(3, 3));
+        assert_eq!(tok.span, FileSpan::one(FilePos::new(3, 3)));
         Ok(())
     }
 
@@ -324,7 +329,7 @@ mod tests {
 
         let tok = lexer.next_token()?;
         assert_eq!(tok.kind, TokenKind::EOF);
-        assert_eq!(tok.loc, FilePos::new(4, 3));
+        assert_eq!(tok.span, FileSpan::one(FilePos::new(4, 3)));
         Ok(())
     }
 
@@ -333,16 +338,16 @@ mod tests {
         let src = String::from("func include for");
         let mut lexer = Lexer::new(&src);
         let expected_toks = vec![
-            Token::new(TokenKind::Kwd(KwdKind::Func), FilePos::new(1, 1)),
-            Token::new(TokenKind::Kwd(KwdKind::Include), FilePos::new(1, 6)),
-            Token::new(TokenKind::Kwd(KwdKind::For), FilePos::new(1, 14)),
-            Token::new(TokenKind::EOF, FilePos::new(1, 17)),
+            Token::new(TokenKind::Kwd(KwdKind::Func), FileSpan::new(FilePos::new(1, 1), FilePos::new(1, 5))),
+            Token::new(TokenKind::Kwd(KwdKind::Include), FileSpan::new(FilePos::new(1, 6), FilePos::new(1, 13))),
+            Token::new(TokenKind::Kwd(KwdKind::For), FileSpan::new(FilePos::new(1, 14), FilePos::new(1, 17))),
+            Token::new(TokenKind::EOF, FileSpan::one(FilePos::new(1, 17))),
         ];
 
         for expected in expected_toks {
             let tok = lexer.next_token()?;
             assert_eq!(tok.kind, expected.kind);
-            assert_eq!(tok.loc, expected.loc);
+            assert_eq!(tok.span, expected.span);
         }
         Ok(())
     }
@@ -353,7 +358,7 @@ mod tests {
         let src = String::from("\"Hello, world!");
         let mut lexer = Lexer::new(&src);
         let result = lexer.next_token();
-        let expected = CortexError::syntax_err("unterminated string literal", FilePos::new(1, 1));
+        let expected = CortexError::syntax_err("unterminated string literal", FileSpan::new(FilePos::new(1, 1), FilePos::new(1, 15)));
 
         assert!(result.is_err());
         assert_eq!(result.err().unwrap(), expected);
@@ -363,24 +368,24 @@ mod tests {
     fn closed_braces() -> Result<(), CortexError> {
         let src = String::from("([\n\n\n()]) [] {\n{{[{}]}\n}\n}");
         let expected_toks = vec![
-            Token::new(TokenKind::BraceOpen(BraceKind::Paren), FilePos::new(1, 1)),
-            Token::new(TokenKind::BraceOpen(BraceKind::Square), FilePos::new(1, 2)),
-            Token::new(TokenKind::BraceOpen(BraceKind::Paren), FilePos::new(4, 1)),
-            Token::new(TokenKind::BraceClosed(BraceKind::Paren), FilePos::new(4, 2)),
-            Token::new(TokenKind::BraceClosed(BraceKind::Square), FilePos::new(4, 3)),
-            Token::new(TokenKind::BraceClosed(BraceKind::Paren), FilePos::new(4, 4)),
-            Token::new(TokenKind::BraceOpen(BraceKind::Square), FilePos::new(4, 6)),
-            Token::new(TokenKind::BraceClosed(BraceKind::Square), FilePos::new(4, 7)),
-            Token::new(TokenKind::BraceOpen(BraceKind::Curly), FilePos::new(4, 9)),
-            Token::new(TokenKind::BraceOpen(BraceKind::Curly), FilePos::new(5, 1)),
-            Token::new(TokenKind::BraceOpen(BraceKind::Curly), FilePos::new(5, 2)),
-            Token::new(TokenKind::BraceOpen(BraceKind::Square), FilePos::new(5, 3)),
-            Token::new(TokenKind::BraceOpen(BraceKind::Curly), FilePos::new(5, 4)),
-            Token::new(TokenKind::BraceClosed(BraceKind::Curly), FilePos::new(5, 5)),
-            Token::new(TokenKind::BraceClosed(BraceKind::Square), FilePos::new(5, 6)),
-            Token::new(TokenKind::BraceClosed(BraceKind::Curly), FilePos::new(5, 7)),
-            Token::new(TokenKind::BraceClosed(BraceKind::Curly), FilePos::new(6, 1)),
-            Token::new(TokenKind::BraceClosed(BraceKind::Curly), FilePos::new(7, 1)),
+            Token::new(TokenKind::BraceOpen(BraceKind::Paren), FileSpan::one(FilePos::new(1, 1))),
+            Token::new(TokenKind::BraceOpen(BraceKind::Square), FileSpan::one(FilePos::new(1, 2))),
+            Token::new(TokenKind::BraceOpen(BraceKind::Paren), FileSpan::one(FilePos::new(4, 1))),
+            Token::new(TokenKind::BraceClosed(BraceKind::Paren), FileSpan::one(FilePos::new(4, 2))),
+            Token::new(TokenKind::BraceClosed(BraceKind::Square), FileSpan::one(FilePos::new(4, 3))),
+            Token::new(TokenKind::BraceClosed(BraceKind::Paren), FileSpan::one(FilePos::new(4, 4))),
+            Token::new(TokenKind::BraceOpen(BraceKind::Square), FileSpan::one(FilePos::new(4, 6))),
+            Token::new(TokenKind::BraceClosed(BraceKind::Square), FileSpan::one(FilePos::new(4, 7))),
+            Token::new(TokenKind::BraceOpen(BraceKind::Curly), FileSpan::one(FilePos::new(4, 9))),
+            Token::new(TokenKind::BraceOpen(BraceKind::Curly), FileSpan::one(FilePos::new(5, 1))),
+            Token::new(TokenKind::BraceOpen(BraceKind::Curly), FileSpan::one(FilePos::new(5, 2))),
+            Token::new(TokenKind::BraceOpen(BraceKind::Square), FileSpan::one(FilePos::new(5, 3))),
+            Token::new(TokenKind::BraceOpen(BraceKind::Curly), FileSpan::one(FilePos::new(5, 4))),
+            Token::new(TokenKind::BraceClosed(BraceKind::Curly), FileSpan::one(FilePos::new(5, 5))),
+            Token::new(TokenKind::BraceClosed(BraceKind::Square), FileSpan::one(FilePos::new(5, 6))),
+            Token::new(TokenKind::BraceClosed(BraceKind::Curly), FileSpan::one(FilePos::new(5, 7))),
+            Token::new(TokenKind::BraceClosed(BraceKind::Curly), FileSpan::one(FilePos::new(6, 1))),
+            Token::new(TokenKind::BraceClosed(BraceKind::Curly), FileSpan::one(FilePos::new(7, 1))),
             Token::eof(FilePos::new(7,2)),
         ];
         let mut lexer = Lexer::new(&src);
@@ -388,7 +393,7 @@ mod tests {
         for expected in expected_toks {
             let tok = lexer.next_token()?;
             assert_eq!(tok.kind, expected.kind);
-            assert_eq!(tok.loc, expected.loc);
+            assert_eq!(tok.span, expected.span);
         }
         Ok(())
     }
@@ -402,7 +407,7 @@ mod tests {
             assert!(lexer.next_token().is_ok());
         }
 
-        let expected = CortexError::syntax_err("unclosed '{'", FilePos::new(2, 1));
+        let expected = CortexError::syntax_err("unclosed '{'", FileSpan::one(FilePos::new(2, 1)));
         let result = lexer.next_token();
 
         assert!(result.is_err());
@@ -417,7 +422,7 @@ mod tests {
         // no need to loop, first next_token is only call that should succeed
         assert!(lexer.next_token().is_ok());
 
-        let expected = CortexError::syntax_err("unopened '}'", FilePos::new(2, 1));
+        let expected = CortexError::syntax_err("unopened '}'", FileSpan::one(FilePos::new(2, 1)));
         let result = lexer.next_token();
 
         assert!(result.is_err());

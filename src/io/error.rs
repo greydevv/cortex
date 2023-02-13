@@ -4,17 +4,17 @@ use std::convert::From;
 
 use colored::Colorize;
 
-use crate::io::file::{ FileHandler, FilePos };
+use crate::io::file::{ FileHandler, FileSpan };
 use crate::lexer::token::Token;
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum CortexError {
-    SyntaxError(String, FilePos, Option<String>),
+    SyntaxError(String, FileSpan, Option<String>),
     FileIOError(String),
 }
 
 impl CortexError {
-    pub fn syntax_err(msg: &str, loc: FilePos) -> CortexError {
+    pub fn syntax_err(msg: &str, loc: FileSpan) -> CortexError {
         CortexError::SyntaxError(String::from(msg), loc, None)
     }
 
@@ -22,7 +22,7 @@ impl CortexError {
         CortexError::FileIOError(String::from(msg))
     }
 
-    pub fn invalid_integer_literal(literal: &String, loc: FilePos) -> CortexError {
+    pub fn invalid_integer_literal(literal: &String, loc: FileSpan) -> CortexError {
         CortexError::SyntaxError(
             format!("'{}' is not a valid integer literal", literal),
             loc,
@@ -30,7 +30,7 @@ impl CortexError {
         )
     }
 
-    pub fn expected_bin_op(literal: &String, loc: FilePos) -> CortexError {
+    pub fn expected_bin_op(literal: &String, loc: FileSpan) -> CortexError {
         CortexError::SyntaxError(
             format!("'{}' is not a binary operator", literal),
             loc,
@@ -40,27 +40,27 @@ impl CortexError {
 
     pub fn unclosed_brace(tok: &Token) -> CortexError {
         let msg = format!("unclosed '{}'", tok.value());
-        CortexError::SyntaxError(msg, tok.loc, None)
+        CortexError::SyntaxError(msg, tok.span, None)
     }
 
     pub fn unopened_brace(tok: &Token) -> CortexError {
         let msg = format!("unopened '{}'", tok.value());
-        CortexError::SyntaxError(msg, tok.loc, None)
+        CortexError::SyntaxError(msg, tok.span, None)
     }
 }
 
-fn underline_err(loc: &FilePos, fh: &FileHandler) -> String {
+fn underline_err(span: &FileSpan, fh: &FileHandler) -> String {
     let mut lines = fh.contents().lines();
-    let line_nr = loc.line.to_string();
+    let line_nr = span.beg.line.to_string();
     let indent = " ".repeat(line_nr.len() + 1);
     format!(
         "{}|\n{} | {}\n{}| {}{}",
         indent,
         line_nr,
-        lines.nth(loc.line - 1).unwrap_or_else(|| ""),
+        lines.nth(span.beg.line - 1).unwrap_or_else(|| ""),
         indent,
-        " ".repeat(loc.col - 1),
-        "^".repeat(1).red().bold(),
+        " ".repeat(span.beg.col - 1),
+        "^".repeat(span.len()).red().bold(),
     )
 }
 
