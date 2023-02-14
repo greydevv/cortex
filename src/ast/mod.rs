@@ -67,7 +67,7 @@ impl AstNode {
                 // return early because we only want to include contents of compound and not any
                 // additional information
                 return format!("{}", children_str);
-            }
+            },
             _ => unimplemented!("AstNode member, '{}', debug string", self)
         };
 

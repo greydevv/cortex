@@ -57,7 +57,7 @@ impl<'a> Parser<'_> {
         let mut params = Vec::new();
         if let TokenKind::Id(_) = self.tok.kind {
             loop {
-                let param_id = self.expect_id(format!("expected parameter identifier after comma, but found '{}' instead", self.tok.value()))?;
+                let param_id = self.expect_id(format!("expected parameter name after comma, but found '{}' instead", self.tok.value()))?;
                 params.push(Box::new(AstNode::Id(param_id)));
                 match &self.tok.kind {
                     TokenKind::Delim(DelimKind::Comma) => (),
@@ -75,7 +75,7 @@ impl<'a> Parser<'_> {
             TokenKind::BraceOpen(BraceKind::Curly) => {
                 TyKind::Void
             },
-            _ => return Err(CortexError::SyntaxError(format!("expected either a return type or the beginning of a function body but found '{}' instead", self.tok.value()), self.tok.span, None))
+            _ => return Err(CortexError::SyntaxError(format!("expected a return-type annotation or the beginning of a function body but got '{}'", self.tok.value()), self.tok.span, None))
         };
         self.eat(TokenKind::BraceOpen(BraceKind::Curly))?;
         let body = self.parse()?;
@@ -101,7 +101,7 @@ impl<'a> Parser<'_> {
                 self.eat(TokenKind::BraceClosed(BraceKind::Paren))?;
                 return Ok(expr);
             },
-            _ => return Err(CortexError::SyntaxError(format!("unknown operand in binary expression: {}", self.tok), self.tok.span, None))
+            _ => return Err(CortexError::SyntaxError(format!("expected operand after binary operator but got '{}'", self.tok.value()), self.tok.span, None))
         };
         self.advance()?;
         Ok(node)
