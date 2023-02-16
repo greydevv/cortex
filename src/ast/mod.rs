@@ -1,6 +1,15 @@
 use crate::lexer::token::{ TyKind, KwdKind, OpKind };
 
 #[derive(Clone, strum_macros::Display)]
+pub enum AstConditionalKind {
+    If {
+        expr: Box<AstNode>,
+        other: Box<AstNode>,
+    },
+    Else
+}
+
+#[derive(Clone, strum_macros::Display)]
 pub enum AstNode {
     Num(i32),
     Id(String),
@@ -24,8 +33,12 @@ pub enum AstNode {
         body: Box<AstNode>,
     },
     Compound {
-        children: Vec<Box<AstNode>>
+        children: Vec<Box<AstNode>>,
     },
+    Cond {
+        kind: AstConditionalKind,
+        body: Box<AstNode>,
+    }
 }
 
 impl AstNode {

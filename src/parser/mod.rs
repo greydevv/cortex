@@ -38,16 +38,30 @@ impl<'a> Parser<'_> {
     fn parse_kwd(&mut self, kwd_kind: &KwdKind) -> Result<AstNode, CortexError> {
         let node = match *kwd_kind {
             KwdKind::Func => self.parse_func()?,
-            KwdKind::Let | KwdKind::Ret => {
+            KwdKind::Let => self.parse_let()?,
+            KwdKind::Ret => {
                 self.advance()?; // skip kwd
                 AstNode::Stmt {
                     kind: kwd_kind.clone(),
                     expr: Box::new(self.parse_expr()?)
                 }
             },
+            KwdKind::If => self.parse_if()?,
             _ => unimplemented!("parse_kwd: '{}'", *kwd_kind),
         };
         Ok(node)
+    }
+
+    fn parse_if(&mut self) -> Result<AstNode, CortexError> {
+        todo!()
+    }
+
+    fn parse_let(&mut self) -> Result<AstNode, CortexError> {
+        self.advance()?; // skip 'let' kwd
+        return Ok(AstNode::Stmt {
+            kind: KwdKind::Let,
+            expr: Box::new(self.parse_expr()?),
+        })
     }
 
     fn parse_func(&mut self) -> Result<AstNode, CortexError> {
