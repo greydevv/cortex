@@ -57,6 +57,13 @@ impl FileSpan {
         )
 
     }
+
+    pub fn to(&self, other: FileSpan) -> FileSpan {
+        FileSpan {
+            beg: self.beg.clone(),
+            end: other.end.clone(),
+        }
+    }
 }
 
 impl Len for FileSpan {
