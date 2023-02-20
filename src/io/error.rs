@@ -7,7 +7,7 @@ use colored::Colorize;
 use crate::io::file::{ FileHandler, FileSpan };
 use crate::lexer::token::{ Token, Len };
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(PartialEq, Debug, Clone)]
 pub enum CortexError {
     SyntaxError(String, FileSpan, Option<String>),
     FileIOError(String),
@@ -66,12 +66,12 @@ fn underline_err(span: &FileSpan, fh: &FileHandler) -> String {
 
 impl CortexError {
     pub fn display(&self, fh: &FileHandler) {
-        let (err_kind, err_msg, err_span, err_info) = match self {
-            CortexError::SyntaxError(msg, span, info) => ("SyntaxError", msg, Some(span), info.clone()),
-            CortexError::FileIOError(msg) => ("FileIOError", msg, None, None)
+        let (err_msg, err_span, err_info) = match self {
+            CortexError::SyntaxError(msg, span, info) => (msg, Some(span), info.clone()),
+            CortexError::FileIOError(msg) => (msg, None, None),
         };
         
-        eprintln!("{}: {}", err_kind.red().bold(), err_msg);
+        eprintln!("{}: {}", "error".red().bold(), err_msg);
         match err_span {
             Some(span) => eprintln!("{}", underline_err(&span, fh)),
             None => ()
