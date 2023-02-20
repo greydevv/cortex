@@ -25,7 +25,7 @@ fn main() {
 }
 
 fn compile(mut _args: impl Iterator<Item = String>) -> Result<(), CortexError> {
-    let fh = match FileHandler::new(String::from("samples/tokens.cx")) {
+    let fh = match FileHandler::new(String::from("samples/debug.cx")) {
         Ok(fh) => fh,
         Err(e) => {
             e.display_msg();
