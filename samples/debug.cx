@@ -1,0 +1,5 @@
+include "hello.cx";
+
+func complex_if() -> i32 {
+  let x = 10 + 3;
+}
