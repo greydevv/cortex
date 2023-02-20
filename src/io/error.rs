@@ -65,13 +65,21 @@ fn underline_err(span: &FileSpan, fh: &FileHandler) -> String {
 }
 
 impl CortexError {
-    pub fn display(&self, fh: &FileHandler) {
-        let (err_msg, err_span, err_info) = match self {
-            CortexError::SyntaxError(msg, span, info) => (msg, Some(span), info.clone()),
-            CortexError::FileIOError(msg) => (msg, None, None),
+    pub fn display_msg(&self) {
+        let err_msg = match self {
+            CortexError::SyntaxError(msg, _, _) => msg,
+            CortexError::FileIOError(msg) => msg,
+        };
+        eprintln!("{}: {}", "error".red().bold(), err_msg);
+    }
+
+    pub fn display_with_line(&self, fh: &FileHandler) {
+        self.display_msg();
+        let (err_span, err_info) = match self {
+            CortexError::SyntaxError(_, span, info) => (Some(span), info.clone()),
+            CortexError::FileIOError(_) => return,
         };
         
-        eprintln!("{}: {}", "error".red().bold(), err_msg);
         match err_span {
             Some(span) => eprintln!("{}", underline_err(&span, fh)),
             None => ()

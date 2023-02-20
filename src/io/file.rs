@@ -30,7 +30,6 @@ impl FileHandler {
             ErrorKind::InvalidData => format!("contents of '{file_path}' are not valid UTF-8"),
             _ => format!("could not read '{file_path}'"),
         };
-
         CortexError::FileIOError(err_msg)
     }
 }
@@ -110,7 +109,7 @@ mod tests {
 
     #[test]
     fn open_file() -> Result<(), CortexError> {
-        let _result = FileHandler::new(String::from("samples/tokens.cx"))?;
+        let _result = FileHandler::new(String::from("samples/debug.cx"))?;
         Ok(())
     }
 

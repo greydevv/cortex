@@ -25,8 +25,13 @@ fn main() {
 }
 
 fn compile(mut _args: impl Iterator<Item = String>) -> Result<(), CortexError> {
-    let fh = FileHandler::new(String::from("samples/tokens.cx"))?;
-
+    let fh = match FileHandler::new(String::from("samples/tokens.cx")) {
+        Ok(fh) => fh,
+        Err(e) => {
+            e.display_msg();
+            return Err(e);
+        }
+    };
     let mut parser = Parser::new(&fh)?;
     match parser.parse() {
         Ok(tree) => { 
@@ -36,7 +41,7 @@ fn compile(mut _args: impl Iterator<Item = String>) -> Result<(), CortexError> {
             Ok(())
         },
         Err(e) => {
-            e.display(&fh);
+            e.display_with_line(&fh);
             Err(e)
         }
     }
