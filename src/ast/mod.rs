@@ -2,6 +2,10 @@ use crate::lexer::token::{ TyKind, KwdKind, OpKind };
 
 #[derive(Clone, strum_macros::Display)]
 pub enum AstConditionalKind {
+    SoloIf {
+        expr: Box<AstNode>
+    },
+    // used for both if and else if
     If {
         expr: Box<AstNode>,
         other: Box<AstNode>,
@@ -32,13 +36,12 @@ pub enum AstNode {
         params: Vec<Box<AstNode>>,
         body: Box<AstNode>,
     },
-    Compound {
-        children: Vec<Box<AstNode>>,
-    },
+    Compound(Vec<Box<AstNode>>),
     Cond {
         kind: AstConditionalKind,
         body: Box<AstNode>,
-    }
+    },
+    Include(String),
 }
 
 impl AstNode {
@@ -67,7 +70,7 @@ impl AstNode {
                 }
                 format!("({}: {}) -> {}\n{}", id, params_str, ret_ty, body.debug(indents+1))
             },
-            AstNode::Compound { children } => {
+            AstNode::Compound(children) => {
                 let mut children_str = String::new();
                 for (i, child) in children.iter().enumerate() {
                     let child_str = if i == 0 {
@@ -81,6 +84,13 @@ impl AstNode {
                 // additional information
                 return format!("{}", children_str);
             },
+            AstNode::Cond { kind, body } =>
+                match kind {
+                    AstConditionalKind::SoloIf { expr } => format!("({})\n{}\n{}", kind, expr.debug(indents+1), body.debug(indents+1)),
+                    AstConditionalKind::If { expr, other } => format!("({})\n{}\n{}\n{}", kind, expr.debug(indents+1), body.debug(indents+1), other.debug(indents+1)),
+                    AstConditionalKind::Else => format!("({})\n{}", kind, body.debug(indents+1)),
+                },
+            AstNode::Include(incl_path) => format!("({})", incl_path),
             _ => unimplemented!("AstNode member, '{}', debug string", self)
         };
 

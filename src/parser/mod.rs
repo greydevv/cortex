@@ -1,7 +1,7 @@
 use crate::io::file::FileHandler;
 use crate::io::error::CortexError;
 use crate::lexer::Lexer;
-use crate::ast::AstNode;
+use crate::ast::{ AstNode, AstConditionalKind };
 use crate::lexer::token::{ Token, TokenKind, OpKind, OpAssoc, TyKind, KwdKind, DelimKind, BraceKind, Literal };
 
 pub struct Parser<'a> {
@@ -24,43 +24,137 @@ impl<'a> Parser<'_> {
     pub fn parse(&mut self) -> Result<Vec<Box<AstNode>>, CortexError> {
         let mut tree = Vec::new();
         while !self.tok.is_eof() {
-            let child = match self.tok.kind.clone() {
-                TokenKind::Id(_) => self.parse_expr()?,
-                TokenKind::Kwd(ref kwd_kind) => self.parse_kwd(kwd_kind)?,
-                TokenKind::BraceOpen(_) | TokenKind::BraceClosed(_) => break,
-                _ => unimplemented!("How to start?: {}", self.tok),
-            };
-            tree.push(Box::new(child));
+            if let TokenKind::Kwd(kwd_kind) = &self.tok.kind {
+                let child = match kwd_kind.clone() {
+                    KwdKind::Include => self.parse_include()?,
+                    KwdKind::Func => self.parse_func()?,
+                    _ => unimplemented!("error message for bad start keyword: '{}'", kwd_kind)
+                };
+                tree.push(Box::new(child));
+            } else {
+                return Err(CortexError::SyntaxError(
+                    format!("expected keyword but got '{}'", self.tok.value()),
+                    self.tok.span,
+                    None
+                ))
+            }
         }
         Ok(tree)
     }
 
+    fn parse_compound(&mut self) -> Result<AstNode, CortexError> {
+        let mut children = Vec::new();
+        self.eat(TokenKind::BraceOpen(BraceKind::Curly))?;
+        loop {
+            let child = match self.tok.kind.clone() {
+                TokenKind::Id(_) | TokenKind::Num(_) => {
+                    let expr = self.parse_expr()?;
+                    self.eat(TokenKind::Delim(DelimKind::Scolon))?;
+                    expr
+                },
+                TokenKind::Kwd(ref kwd_kind) => self.parse_kwd(kwd_kind)?,
+                TokenKind::BraceClosed(BraceKind::Curly) => {
+                    self.advance()?;
+                    break;
+                }
+                _ => unimplemented!("DEV ERROR: NOT SURE HOW TO PROCEED ON TOKEN: {}", self.tok),
+            };
+            children.push(Box::new(child));
+        }
+        Ok(AstNode::Compound(children))
+    }
+
+    fn parse_include(&mut self) -> Result<AstNode, CortexError> {
+        self.advance()?; // skip 'include' kwd
+        if let TokenKind::String(_) = self.tok.kind {
+            let incl = AstNode::Include(self.tok.value());
+            self.advance()?; // skip string
+            self.eat(TokenKind::Delim(DelimKind::Scolon))?;
+            Ok(incl)
+        } else {
+            Err(CortexError::SyntaxError(
+                format!("expected string literal but got '{}'", self.tok.value()),
+                self.tok.span,
+                None,
+            ))
+        }
+    }
+
     fn parse_kwd(&mut self, kwd_kind: &KwdKind) -> Result<AstNode, CortexError> {
         let node = match *kwd_kind {
+            KwdKind::Include => self.parse_include()?,
             KwdKind::Func => self.parse_func()?,
             KwdKind::Let => self.parse_let()?,
             KwdKind::Ret => {
-                self.advance()?; // skip kwd
+                self.advance()?; // skip 'ret' kwd
+                let expr = self.parse_expr()?;
+                self.eat(TokenKind::Delim(DelimKind::Scolon))?;
                 AstNode::Stmt {
                     kind: kwd_kind.clone(),
-                    expr: Box::new(self.parse_expr()?)
+                    expr: Box::new(expr),
                 }
             },
             KwdKind::If => self.parse_if()?,
+            KwdKind::Else => {
+                self.advance()?;
+                let (kind, span) = match self.tok.kind {
+                    TokenKind::Kwd(KwdKind::If) => ("else if", self.prev_tok.span.to(self.tok.span)),
+                    _ => ("else", self.prev_tok.span),
+                };
+                return Err(CortexError::SyntaxError(format!("found '{}' without a preceding 'if' statement", kind), span, None));
+            }
             _ => unimplemented!("parse_kwd: '{}'", *kwd_kind),
         };
         Ok(node)
     }
 
     fn parse_if(&mut self) -> Result<AstNode, CortexError> {
-        todo!()
+        self.advance()?; // skip 'if' kwd
+        match self.tok.kind {
+            TokenKind::BraceOpen(BraceKind::Curly) => return Err(CortexError::SyntaxError(String::from("expected expression"), self.tok.span, None)),
+            _ => (),
+        }
+        let expr = self.parse_expr()?;
+        let body = self.parse_compound()?;
+        let kind = match self.tok.kind {
+            TokenKind::Kwd(KwdKind::Else) => {
+                self.advance()?;
+                match self.tok.kind {
+                    TokenKind::Kwd(KwdKind::If) => {
+                        AstConditionalKind::If {
+                            expr: Box::new(expr),
+                            other: Box::new(self.parse_if()?)
+                        }
+                    },
+                    TokenKind::BraceOpen(BraceKind::Curly) => {
+                        let else_body = self.parse_compound()?;
+                        let else_ast = AstNode::Cond {
+                            kind: AstConditionalKind::Else,
+                            body: Box::new(else_body),
+                        };
+                        AstConditionalKind::If {
+                            expr: Box::new(expr),
+                            other: Box::new(else_ast),
+                        }
+                    },
+                    _ => return Err(CortexError::SyntaxError(format!("expected else body but got '{}'", self.tok.value()), self.tok.span, None))
+                }
+            },
+            _ => AstConditionalKind::SoloIf { expr: Box::new(expr) },
+        };
+        Ok(AstNode::Cond {
+            kind,
+            body: Box::new(body),
+        })
     }
 
     fn parse_let(&mut self) -> Result<AstNode, CortexError> {
         self.advance()?; // skip 'let' kwd
+        let expr = self.parse_expr()?;
+        self.eat(TokenKind::Delim(DelimKind::Scolon))?;
         return Ok(AstNode::Stmt {
             kind: KwdKind::Let,
-            expr: Box::new(self.parse_expr()?),
+            expr: Box::new(expr),
         })
     }
 
@@ -91,14 +185,12 @@ impl<'a> Parser<'_> {
             },
             _ => return Err(CortexError::SyntaxError(format!("expected a return-type annotation or the beginning of a function body but got '{}'", self.tok.value()), self.tok.span, None))
         };
-        self.eat(TokenKind::BraceOpen(BraceKind::Curly))?;
-        let body = self.parse()?;
-        self.eat(TokenKind::BraceClosed(BraceKind::Curly))?;
+        let body = self.parse_compound()?;
         let node = AstNode::Func {
             id: func_id,
             ret_ty,
             params,
-            body: Box::new(AstNode::Compound { children: body })
+            body: Box::new(body)
         };
         Ok(node)
     }
@@ -115,7 +207,7 @@ impl<'a> Parser<'_> {
                 self.eat(TokenKind::BraceClosed(BraceKind::Paren))?;
                 return Ok(expr);
             },
-            _ => return Err(CortexError::SyntaxError(format!("expected operand after binary operator but got '{}'", self.tok.value()), self.tok.span, None))
+            _ => return Err(CortexError::SyntaxError(format!("expected operand but got '{}'", self.tok.value()), self.tok.span, None))
         };
         self.advance()?;
         Ok(node)
@@ -123,7 +215,6 @@ impl<'a> Parser<'_> {
 
     fn parse_expr(&mut self) -> Result<AstNode, CortexError> {
         let expr = self.parse_expr_helper(0)?;
-        self.eat(TokenKind::Delim(DelimKind::Scolon))?;
         Ok(expr)
     }
 
