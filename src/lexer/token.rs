@@ -225,10 +225,19 @@ pub enum OpAssoc {
     Right
 }
 
-#[derive(PartialEq, Clone, Debug, strum_macros::Display)]
+#[derive(PartialEq, Clone, Debug)]
 pub enum TyKind {
     Int(usize),
     Void,
+}
+
+impl fmt::Display for TyKind {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            TyKind::Int(size) => write!(f, "i{}", size),
+            TyKind::Void => write!(f, "void"),
+        }
+    }
 }
 
 impl MaybeFrom<&String> for TyKind {

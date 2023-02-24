@@ -1,5 +1,5 @@
 use crate::io::file::FileHandler;
-use crate::io::error::CortexError;
+use crate::io::error::{ Result, CortexError };
 use crate::lexer::Lexer;
 use crate::ast::{ AstNode, AstConditionalKind };
 use crate::lexer::token::{ Token, TokenKind, OpKind, OpAssoc, TyKind, KwdKind, DelimKind, BraceKind, Literal };
@@ -11,7 +11,7 @@ pub struct Parser<'a> {
 }
 
 impl<'a> Parser<'_> {
-    pub fn new(file_handler: &'a FileHandler) -> Result<Parser<'a>, CortexError> {
+    pub fn new(file_handler: &'a FileHandler) -> Result<Parser<'a>> {
         let mut lexer = Lexer::new(file_handler.contents());
         let tok = lexer.next_token()?;
         Ok(Parser {
@@ -21,7 +21,7 @@ impl<'a> Parser<'_> {
         })
     }
 
-    pub fn parse(&mut self) -> Result<Vec<Box<AstNode>>, CortexError> {
+    pub fn parse(&mut self) -> Result<Vec<Box<AstNode>>> {
         let mut tree = Vec::new();
         while !self.tok.is_eof() {
             if let TokenKind::Kwd(kwd_kind) = &self.tok.kind {
@@ -42,7 +42,7 @@ impl<'a> Parser<'_> {
         Ok(tree)
     }
 
-    fn parse_compound(&mut self) -> Result<AstNode, CortexError> {
+    fn parse_compound(&mut self) -> Result<AstNode> {
         let mut children = Vec::new();
         self.eat(TokenKind::BraceOpen(BraceKind::Curly))?;
         loop {
@@ -64,7 +64,7 @@ impl<'a> Parser<'_> {
         Ok(AstNode::Compound(children))
     }
 
-    fn parse_include(&mut self) -> Result<AstNode, CortexError> {
+    fn parse_include(&mut self) -> Result<AstNode> {
         self.advance()?; // skip 'include' kwd
         if let TokenKind::String(_) = self.tok.kind {
             let incl = AstNode::Include(self.tok.value());
@@ -80,7 +80,7 @@ impl<'a> Parser<'_> {
         }
     }
 
-    fn parse_kwd(&mut self, kwd_kind: &KwdKind) -> Result<AstNode, CortexError> {
+    fn parse_kwd(&mut self, kwd_kind: &KwdKind) -> Result<AstNode> {
         let node = match *kwd_kind {
             KwdKind::Include => self.parse_include()?,
             KwdKind::Func => self.parse_func()?,
@@ -108,7 +108,7 @@ impl<'a> Parser<'_> {
         Ok(node)
     }
 
-    fn parse_if(&mut self) -> Result<AstNode, CortexError> {
+    fn parse_if(&mut self) -> Result<AstNode> {
         self.advance()?; // skip 'if' kwd
         match self.tok.kind {
             TokenKind::BraceOpen(BraceKind::Curly) => return Err(CortexError::SyntaxError(String::from("expected expression"), self.tok.span, None)),
@@ -148,7 +148,7 @@ impl<'a> Parser<'_> {
         })
     }
 
-    fn parse_let(&mut self) -> Result<AstNode, CortexError> {
+    fn parse_let(&mut self) -> Result<AstNode> {
         self.advance()?; // skip 'let' kwd
         let expr = self.parse_expr()?;
         self.eat(TokenKind::Delim(DelimKind::Scolon))?;
@@ -158,7 +158,7 @@ impl<'a> Parser<'_> {
         })
     }
 
-    fn parse_func(&mut self) -> Result<AstNode, CortexError> {
+    fn parse_func(&mut self) -> Result<AstNode> {
         self.advance()?; // skip 'func' kwd
         let func_id = self.expect_id(format!("expected function name but found '{}' instead", self.tok.value()))?;
         self.eat(TokenKind::BraceOpen(BraceKind::Paren))?;
@@ -195,7 +195,7 @@ impl<'a> Parser<'_> {
         Ok(node)
     }
 
-    fn parse_term(&mut self) -> Result<AstNode, CortexError> {
+    fn parse_term(&mut self) -> Result<AstNode> {
         let node = match &self.tok.kind {
             TokenKind::Num(n) => AstNode::Num(*n),
             TokenKind::Id(ref id) => AstNode::Id(id.clone()),
@@ -213,12 +213,12 @@ impl<'a> Parser<'_> {
         Ok(node)
     }
 
-    fn parse_expr(&mut self) -> Result<AstNode, CortexError> {
+    fn parse_expr(&mut self) -> Result<AstNode> {
         let expr = self.parse_expr_helper(0)?;
         Ok(expr)
     }
 
-    fn parse_expr_helper(&mut self, min_prec: i32) -> Result<AstNode, CortexError> {
+    fn parse_expr_helper(&mut self, min_prec: i32) -> Result<AstNode> {
         let mut lhs = self.parse_term()?;
 
         loop {
@@ -251,13 +251,13 @@ impl<'a> Parser<'_> {
         Ok(lhs)
     }
 
-    fn advance(&mut self) -> Result<(), CortexError> {
+    fn advance(&mut self) -> Result {
         self.prev_tok = self.tok.clone();
         self.tok = self.lexer.next_token()?;
         Ok(())
     }
 
-    fn expect_id(&mut self, with_msg: String) -> Result<String, CortexError> {
+    fn expect_id(&mut self, with_msg: String) -> Result<String> {
         let result = match &self.tok.kind {
             TokenKind::Id(ident) => Ok(ident.to_owned()),
             _ => Err(CortexError::SyntaxError(with_msg, self.tok.span, None))
@@ -266,7 +266,7 @@ impl<'a> Parser<'_> {
         result
     }
 
-    fn expect_ty(&mut self) -> Result<TyKind, CortexError> {
+    fn expect_ty(&mut self) -> Result<TyKind> {
         let result = match &self.tok.kind {
             TokenKind::Ty(ty_kind) => Ok(ty_kind.to_owned()),
             _ => Err(CortexError::SyntaxError(format!("expected type but got '{}' instead", self.tok.value()), self.tok.span, None))
@@ -275,7 +275,7 @@ impl<'a> Parser<'_> {
         result
     }
 
-    fn eat(&mut self, expected_kind: TokenKind) -> Result<(), CortexError> {
+    fn eat(&mut self, expected_kind: TokenKind) -> Result {
         let tok_expected = match (&self.tok.kind, &expected_kind) {
             (TokenKind::Num(_), TokenKind::Num(_)) => true,
             (TokenKind::Id(_), TokenKind::Id(_)) => true,

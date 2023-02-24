@@ -3,14 +3,14 @@ use std::io::{ Read, ErrorKind };
 use std::fmt;
 
 use crate::lexer::token::Len;
-use crate::io::error::CortexError;
+use crate::io::error::{ CortexError, Result };
 
 pub struct FileHandler {
     src: String,
 }
 
 impl FileHandler {
-    pub fn new(file_path: String) -> Result<FileHandler, CortexError> {
+    pub fn new(file_path: String) -> Result<FileHandler> {
         let mut f = File::open(&file_path).map_err(|e| FileHandler::translate_err(e, &file_path))?;
         let mut src = String::new();
         f.read_to_string(&mut src).map_err(|e| FileHandler::translate_err(e, &file_path))?;
@@ -108,7 +108,7 @@ mod tests {
     use super::*;
 
     #[test]
-    fn open_file() -> Result<(), CortexError> {
+    fn open_file() -> Result {
         let _result = FileHandler::new(String::from("samples/debug.cx"))?;
         Ok(())
     }

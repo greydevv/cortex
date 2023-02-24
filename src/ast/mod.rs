@@ -45,7 +45,11 @@ pub enum AstNode {
 }
 
 impl AstNode {
-    pub fn debug(&self, indents: usize) -> String {
+    pub fn debug_format(&self) -> String {
+        self.debug(0)
+    }
+
+    fn debug(&self, indents: usize) -> String {
         let ast_string = match self {
             AstNode::Num(n) => format!("({})", n),
             AstNode::Id(s) => format!("({})", s),

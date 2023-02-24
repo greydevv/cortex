@@ -1,7 +1,7 @@
 use std::iter::Peekable;
 
 use crate::io::file::{ FilePos, FileSpan };
-use crate::io::error::CortexError;
+use crate::io::error::{ CortexError, Result };
 use crate::lexer::token::{
     Token,
     TokenKind,
@@ -64,7 +64,7 @@ impl<'a> Lexer<'_> {
         }
     }
 
-    pub fn next_token(&mut self) -> Result<Token, CortexError> {
+    pub fn next_token(&mut self) -> Result<Token> {
         self.skip_junk();
         if self.eof() {
             // brace balancing state (brace_stack) should be empty if all opened braces were
@@ -129,7 +129,7 @@ impl<'a> Lexer<'_> {
     ///
     /// "-13" // Token(TokenKind::Num, "-13", ...)
     /// ```
-    fn lex_num(&mut self) -> Result<Token, CortexError> {
+    fn lex_num(&mut self) -> Result<Token> {
         // initializing with current char before the loop allows a negative sign to appear before a
         // numeric literal
         let mut val = String::from(self.c);
@@ -146,7 +146,7 @@ impl<'a> Lexer<'_> {
         }
     }
 
-    fn lex_other(&mut self) -> Result<Token, CortexError> {
+    fn lex_other(&mut self) -> Result<Token> {
         let beg_pos = self.pos;
         let kind = match self.c {
             '.' => TokenKind::Delim(DelimKind::Period),
@@ -199,7 +199,7 @@ impl<'a> Lexer<'_> {
         Ok(tok)
     }
 
-    fn update_balancing_state(&mut self, tok: Token) -> Result<(), CortexError> {
+    fn update_balancing_state(&mut self, tok: Token) -> Result {
         match &tok.kind {
             TokenKind::BraceOpen(_) => self.brace_stack.push(tok),
             TokenKind::BraceClosed(_) => {
@@ -228,7 +228,7 @@ impl<'a> Lexer<'_> {
         Ok(())
     }
 
-    fn lex_string(&mut self) -> Result<Token, CortexError> {
+    fn lex_string(&mut self) -> Result<Token> {
         let mut val = String::new();
         let beg_pos = self.pos;
 
@@ -287,7 +287,7 @@ mod tests {
     use super::*;
 
     #[test]
-    fn empty_file() -> Result<(), CortexError> {
+    fn empty_file() -> Result {
         let src = String::new();
         let mut lexer = Lexer::new(&src);
 
@@ -298,7 +298,7 @@ mod tests {
     }
 
     #[test]
-    fn leading_whitespace() -> Result<(), CortexError> {
+    fn leading_whitespace() -> Result {
         let src = String::from("  \n\n");
         let mut lexer = Lexer::new(&src);
 
@@ -309,7 +309,7 @@ mod tests {
     }
 
     #[test]
-    fn trailing_whitespace() -> Result<(), CortexError> {
+    fn trailing_whitespace() -> Result {
         let src = String::from(";\n\n  ");
         let mut lexer = Lexer::new(&src);
 
@@ -321,7 +321,7 @@ mod tests {
     }
 
     #[test]
-    fn leading_and_trailing_whitespace() -> Result<(), CortexError> {
+    fn leading_and_trailing_whitespace() -> Result {
         let src = String::from("  \n\n  \n  ");
         let mut lexer = Lexer::new(&src);
 
@@ -332,7 +332,7 @@ mod tests {
     }
 
     #[test]
-    fn keywords() -> Result<(), CortexError> {
+    fn keywords() -> Result {
         let src = String::from("func include for");
         let mut lexer = Lexer::new(&src);
         let expected_toks = vec![
@@ -363,7 +363,7 @@ mod tests {
     }
 
     #[test]
-    fn closed_braces() -> Result<(), CortexError> {
+    fn closed_braces() -> Result {
         let src = String::from("([\n\n\n()]) [] {\n{{[{}]}\n}\n}");
         let expected_toks = vec![
             Token::new(TokenKind::BraceOpen(BraceKind::Paren), FileSpan::one(FilePos::new(1, 1))),
