@@ -3,6 +3,20 @@ use std::convert::From;
 
 use crate::io::file::{ FilePos, FileSpan };
 
+// pub enum Count {
+//     Optional,
+//     One,
+//     Many(u32),
+// }
+
+// we can create a grammar from structures like this
+// in parser, create a Vec<Token> and ExpectedToken.tok will reference one of those tokens
+// each time an AST obj is returned, clear the Vec and move to the next structure
+// pub struct ExpectedToken<'a> {
+//     tok: &'a Token,
+//     count: Count,
+// }
+
 pub trait Len {
     fn len(&self) -> usize;
 }

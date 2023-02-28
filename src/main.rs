@@ -16,7 +16,7 @@ fn main() {
     let sess_result = Session::initiate();
     match sess_result {
         Ok(_) => (),
-        Err(ref err) => err.display_msg(),
+        Err(ref err) => eprintln!("{}", err),
     }
     let status_string = match sess_result {
         Ok(_) => "SUCCESS".green(),

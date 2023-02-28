@@ -5,7 +5,9 @@ use std::fmt;
 use crate::lexer::token::Len;
 use crate::io::error::{ CortexError, Result };
 
+#[derive(Debug)]
 pub struct FileHandler {
+    file_path: String,
     src: String,
 }
 
@@ -15,6 +17,7 @@ impl FileHandler {
         let mut src = String::new();
         f.read_to_string(&mut src).map_err(|e| FileHandler::translate_err(e, &file_path))?;
         Ok(FileHandler {
+            file_path,
             src
         })
     }
@@ -31,6 +34,20 @@ impl FileHandler {
             _ => format!("could not read '{file_path}'"),
         };
         CortexError::FileIOError(err_msg)
+    }
+
+    pub fn file_path(&self) -> &String {
+        &self.file_path
+    }
+}
+
+impl PartialEq for FileHandler {
+    fn eq(&self, other: &FileHandler) -> bool {
+        self.file_path == other.file_path
+    }
+
+    fn ne(&self, other: &FileHandler) -> bool {
+        self.file_path != other.file_path
     }
 }
 
