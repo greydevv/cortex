@@ -132,6 +132,7 @@ impl<'a> Lexer<'_> {
     ///
     /// "-13" // Token(TokenKind::Num, "-13", ...)
     /// ```
+    ///
     fn lex_num(&mut self) -> Result<Token> {
         // initializing with current char before the loop allows a negative sign to appear before a
         // numeric literal

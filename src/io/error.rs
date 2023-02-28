@@ -77,6 +77,25 @@ impl CortexError {
 }
 
 impl CortexError {
+
+    /// Returns a String with related info regarding the offending token(s) in an error.
+    ///
+    /// The following snippet shows an example output generated from an error due to a reference to
+    /// an unknown variable at the beginning the fifth line in the file `"path/to/some_file.cx"`.
+    ///
+    /// ```
+    ///   at [5:1] in path/to/some_file.cx
+    ///   |
+    /// 5 | unknown_var = 10;
+    ///   | ^^^^^^^^^^^
+    /// ```
+    ///
+    /// Above, the offending token is `unknown_var` and is underlined using multiple instances of
+    /// the `^` character.
+    ///
+    /// The actual error message itself is not included in this output as some errors may not be
+    /// associated with a source (e.g., an error raised for invalid CLI arguments).
+    ///
     pub fn underline(span: &FileSpan, file_path: &String) -> Result<String> {
         let fh = FileHandler::new(file_path.clone())?;
         let mut lines = fh.contents().lines();
