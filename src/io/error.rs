@@ -28,8 +28,8 @@ pub enum CortexError {
 impl CortexError {
     pub fn syntax_err(ctx: &SessCtx, msg: &str, span: FileSpan, help: Option<String>) -> CortexError {
         CortexError::SyntaxError{
-            msg: String::from(msg),
             file_path: ctx.file_path(),
+            msg: String::from(msg),
             span,
             help,
         }
@@ -39,36 +39,36 @@ impl CortexError {
         CortexError::FileIOError(String::from(msg))
     }
 
-    pub fn invalid_integer_literal(file_path: String, lit: &String, span: FileSpan) -> CortexError {
+    pub fn invalid_integer_literal(ctx: &SessCtx, lit: &String, span: FileSpan) -> CortexError {
         CortexError::SyntaxError { 
-            file_path,
+            file_path: ctx.file_path(),
             msg: format!("'{}' is not a valid integer literal", lit),
             span,
             help: Some(String::from("Integer literals are expressed as a sequence of digits, e.g., \"23\" or \"921\"."))
         }
     }
 
-    pub fn expected_bin_op(file_path: String, lit: &String, span: FileSpan) -> CortexError {
+    pub fn expected_bin_op(ctx: &SessCtx, lit: &String, span: FileSpan) -> CortexError {
         CortexError::SyntaxError { 
-            file_path,
+            file_path: ctx.file_path(),
             msg: format!("'{}' is not a binary operator", lit),
             span,
             help: None,
         }
     }
 
-    pub fn unclosed_brace(file_path: String, tok: &Token) -> CortexError {
+    pub fn unclosed_brace(ctx: &SessCtx, tok: &Token) -> CortexError {
         CortexError::SyntaxError {
-            file_path,
+            file_path: ctx.file_path(),
             msg: format!("unclosed '{}'", tok.value()),
             span: tok.span,
             help: None
         }
     }
 
-    pub fn unopened_brace(file_path: String, tok: &Token) -> CortexError {
+    pub fn unopened_brace(ctx: &SessCtx, tok: &Token) -> CortexError {
         CortexError::SyntaxError{
-            file_path,
+            file_path: ctx.file_path(),
             msg: format!("unopened '{}'", tok.value()),
             span: tok.span,
             help: None

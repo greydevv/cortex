@@ -73,7 +73,7 @@ impl<'a> Lexer<'_> {
             // brace balancing state (brace_stack) should be empty if all opened braces were
             // closed at some point
             match self.brace_stack.last() {
-                Some(unclosed_brace) => Err(CortexError::unclosed_brace(self.ctx.file_path(), &unclosed_brace).into()),
+                Some(unclosed_brace) => Err(CortexError::unclosed_brace(self.ctx, &unclosed_brace).into()),
                 None => Ok(Token::eof(self.pos))
             }
         } else if self.c.is_alphabetic() {
@@ -146,7 +146,7 @@ impl<'a> Lexer<'_> {
         let span = FileSpan::new(beg_pos, self.pos);
         match val.parse::<i32>() {
             Ok(n) => Ok(Token::new(TokenKind::Num(n), span)),
-            Err(_) => Err(CortexError::invalid_integer_literal(self.ctx.file_path(), &val, span).into())
+            Err(_) => Err(CortexError::invalid_integer_literal(self.ctx, &val, span).into())
         }
     }
 
@@ -213,7 +213,7 @@ impl<'a> Lexer<'_> {
                     Some(opening_tok) if tok.closes(&opening_tok) => return Ok(()),
                     Some(opening_tok) => opening_tok,
                     // stack is empty, the current closing brace is unopened
-                    None => return Err(CortexError::unopened_brace(self.ctx.file_path(), &tok).into()),
+                    None => return Err(CortexError::unopened_brace(self.ctx, &tok).into()),
                 };
                 // unwind the balancing state (brace_stack) to see if the current closing token
                 // was opened somewhere previously
@@ -221,11 +221,11 @@ impl<'a> Lexer<'_> {
                     // found a matching opening token, the token on the top of the stack was
                     // unclosed
                     if tok.closes(&opening_tok) {
-                        return Err(CortexError::unclosed_brace(self.ctx.file_path(), &top_tok).into());
+                        return Err(CortexError::unclosed_brace(self.ctx, &top_tok).into());
                     }
                 }
                 // did not find a matching opening token, the current closing token is unopened
-                return Err(CortexError::unopened_brace(self.ctx.file_path(), &tok).into());
+                return Err(CortexError::unopened_brace(self.ctx, &tok).into());
             },
             _ => ()
         }

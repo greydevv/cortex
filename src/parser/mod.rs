@@ -280,7 +280,7 @@ impl<'a> Parser<'_> {
                 },
                 None =>
                     return Err(CortexError::expected_bin_op(
-                        self.ctx.file_path(),
+                        self.ctx,
                         &self.tok.value(),
                         self.tok.span,
                     ).into()),
