@@ -263,11 +263,6 @@ impl MaybeFrom<TokenKind> for BinOpKind {
     /// 16 + -3
     /// ```
     /// Above, the two arithmetic equations are equivalent.
-    ///
-    ///
-    ///
-    ///
-    ///
     fn maybe_from(tok_kind: &TokenKind) -> Option<BinOpKind> {
         match tok_kind {
             TokenKind::BinOp(op_kind) => Some(op_kind.clone()),
