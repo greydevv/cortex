@@ -11,6 +11,7 @@ use crate::sess::SessCtx;
 /// Result alias used throughout compilation stages.
 pub type Result<T = (), E = Box<CortexError>> = std::result::Result<T, E>;
 
+/// Error type of all errors raised before and during the compilation process.
 #[derive(PartialEq, Debug)]
 pub enum CortexError {
     ArgError(String),

@@ -3,8 +3,6 @@ use crate::io::file::FileHandler;
 use crate::parser::Parser;
 use crate::args::parse_args;
 
-pub struct Session;
-
 pub struct SessCtx {
     pub fh: FileHandler,
 }
@@ -20,6 +18,8 @@ impl SessCtx {
         self.fh.file_path().clone()
     }
 }
+
+pub struct Session;
 
 impl Session {
     pub fn initiate() -> Result {
