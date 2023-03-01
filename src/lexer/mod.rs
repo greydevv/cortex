@@ -107,7 +107,7 @@ impl<'a> Lexer<'_> {
         }
     }
 
-    /// Returns a Token containing data representing a numeric literal.
+    /// Returns a [`Token`] containing data representing a numeric literal.
     ///
     /// It is worth noting that the Parser is responsible for understanding the following two
     /// expressions are semantically valid and equivalent:
@@ -151,6 +151,8 @@ impl<'a> Lexer<'_> {
         }
     }
 
+    /// Returns a [`Token`] from a static element of source code (i.e., delimiters, operators,
+    /// etc.).
     fn lex_other(&mut self) -> Result<Token> {
         let beg_pos = self.pos;
         let kind = match self.c {
@@ -162,6 +164,7 @@ impl<'a> Lexer<'_> {
             '-' => 
                 match self.peek_char() {
                     '>' => TokenKind::Arrow,
+                    // could be a unary operator (e.g., '!' in '!x')
                     c if !c.is_whitespace() => TokenKind::UnaryOp(UnaryOpKind::Neg),
                     _ => TokenKind::BinOp(BinOpKind::Sub),
                 },

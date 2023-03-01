@@ -1,5 +1,5 @@
 use std::fmt;
-use std::convert::From;
+use std::convert::TryFrom;
 
 use crate::io::file::{ FilePos, FileSpan };
 
@@ -21,14 +21,35 @@ pub trait Len {
     fn len(&self) -> usize;
 }
 
+/// Safe type conversions by way of [`Option`] when a type conversion may not be possible.
+///
+/// This method is different from [`TryFrom`] as it returns an [`Option`] instead of a [`Result`].
+/// Therefore, this method should be used in cases in which the error information is not important.
+/// Instead of using a placeholder when destructuring an error from [`TryFrom`], use `MaybeFrom`
+/// to handle [`None`] to be more explicit in these cases.
+///
+/// ```rust
+/// // TryFrom
+/// match SomeType::try_from(other_type) {
+///     Ok(converted_value) => ...,
+///     Err(_) => ...
+/// }
+///
+/// // MaybeFrom
+/// match SomeType::maybe_from(&other_type) {
+///     Some(converted_value) => ...,
+///     None => ...
+/// }
+/// ```
 pub trait MaybeFrom<T>: Sized {
-    fn maybe_from(value: T) -> Option<Self>;
+    fn maybe_from(value: &T) -> Option<Self>;
 }
 
 pub trait Literal {
     fn literal(&self) -> String;
 }
 
+/// A token resulting from source code tokenization.
 #[derive(Clone)]
 pub struct Token {
     pub kind: TokenKind,
@@ -43,6 +64,7 @@ impl Token {
         }
     }
 
+    /// Returns a [`Token`] representing end-of-file (EOF).
     pub fn eof(pos: FilePos) -> Token {
         Token::new(
             TokenKind::EOF,
@@ -50,6 +72,7 @@ impl Token {
         )
     }
 
+    /// Returns a dummy [`Token`] for use in initializers when the default token is unknown.
     pub fn dummy() -> Token {
         Token::new(
             TokenKind::Dummy,
@@ -57,6 +80,7 @@ impl Token {
         )
     }
 
+    /// Returns `true` if `self.kind` is a closing brace and 'other' is its matching closing brace.
     pub fn closes(&self, other: &Token) -> bool {
         match &self.kind {
             TokenKind::BraceClosed(open_brace_kind) =>
@@ -83,6 +107,7 @@ impl fmt::Display for Token {
     }
 }
 
+/// Different possible kinds of [`Token`].
 #[derive(PartialEq, Debug, Clone, strum_macros::Display)]
 pub enum TokenKind {
     Num(i32),
@@ -228,7 +253,22 @@ impl Literal for BinOpKind {
     }
 }
 
-impl MaybeFrom<&TokenKind> for BinOpKind {
+impl MaybeFrom<TokenKind> for BinOpKind {
+    /// Attempts to convert a generic [`TokenKind`] into a [`BinOpKind`].
+    ///
+    /// It is possible for a unary negation operation to be converted into a binary subtraction
+    /// operator. Take the following example.
+    /// 
+    /// ```
+    /// 16 -3
+    /// 16 + -3
+    /// ```
+    /// Above, the two arithmetic equations are equivalent.
+    ///
+    ///
+    ///
+    ///
+    ///
     fn maybe_from(tok_kind: &TokenKind) -> Option<BinOpKind> {
         match tok_kind {
             TokenKind::BinOp(op_kind) => Some(op_kind.clone()),
@@ -278,7 +318,7 @@ impl fmt::Display for TyKind {
     }
 }
 
-impl MaybeFrom<&String> for TyKind {
+impl MaybeFrom<String> for TyKind {
     fn maybe_from(value: &String) -> Option<TyKind> {
         match value.as_str() {
             "i32" => Some(TyKind::Int(32)),
@@ -307,7 +347,7 @@ pub enum KwdKind {
     Else, // don't need else if, parser just peeks for If if on Else
 }
 
-impl MaybeFrom<&String> for KwdKind {
+impl MaybeFrom<String> for KwdKind {
     fn maybe_from(value: &String) -> Option<KwdKind> {
         match value.as_str() {
             "func" => Some(KwdKind::Func),
