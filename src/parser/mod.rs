@@ -1,7 +1,18 @@
 use crate::io::error::{ Result, CortexError };
 use crate::lexer::Lexer;
 use crate::ast::{ AstNode, AstConditionalKind };
-use crate::lexer::token::{ Token, TokenKind, OpKind, OpAssoc, TyKind, KwdKind, DelimKind, BraceKind, Literal };
+use crate::lexer::token::{
+    Token,
+    TokenKind,
+    BinOpKind,
+    OpAssoc,
+    TyKind,
+    KwdKind,
+    DelimKind,
+    BraceKind,
+    Literal,
+    MaybeFrom,
+};
 use crate::sess::SessCtx;
 
 pub struct Parser<'a> {
@@ -223,8 +234,15 @@ impl<'a> Parser<'_> {
     }
 
     fn parse_term(&mut self) -> Result<AstNode> {
-        let node = match &self.tok.kind {
-            TokenKind::Num(n) => AstNode::Num(*n),
+        let node = match self.tok.kind.clone() {
+            TokenKind::Num(n) => AstNode::Num(n),
+            TokenKind::UnaryOp(op_kind) => {
+                self.advance()?;
+                return Ok(AstNode::UnaryExpr {
+                    op: op_kind.clone(),
+                    rhs: Box::new(self.parse_term()?),
+                });
+            },
             TokenKind::Id(ref id) => AstNode::Id(id.clone()),
             TokenKind::BraceOpen(ref brace_kind) if *brace_kind == BraceKind::Paren => {
                 // pass opening parenthesis
@@ -255,11 +273,11 @@ impl<'a> Parser<'_> {
         let mut lhs = self.parse_term()?;
 
         loop {
-            match self.tok.kind {
-                TokenKind::Op(_) => (),
-                TokenKind::EOF | _ => break,
-            }
-            match OpKind::from(&self.tok.kind) {
+            // match self.tok.kind {
+            //     TokenKind::BinOp(_) | TokenKind::UnaryOp(_) => (),
+            //     TokenKind::EOF | _ => break,
+            // }
+            match BinOpKind::maybe_from(&self.tok.kind) {
                 Some(op_kind) => {
                     let prec = op_kind.prec();
                     if prec < min_prec {
@@ -272,18 +290,13 @@ impl<'a> Parser<'_> {
                     };
                     self.advance()?;
                     let rhs = self.parse_expr_helper(next_min_prec)?;
-                    lhs = AstNode::BinaryExpr {
+                    lhs = AstNode::BinExpr {
                         op: op_kind,
                         lhs: Box::new(lhs),
                         rhs: Box::new(rhs),
                     }
                 },
-                None =>
-                    return Err(CortexError::expected_bin_op(
-                        self.ctx,
-                        &self.tok.value(),
-                        self.tok.span,
-                    ).into()),
+                None => break,
             }
         }
         Ok(lhs)

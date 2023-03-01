@@ -1,4 +1,4 @@
-use crate::lexer::token::{ TyKind, KwdKind, OpKind };
+use crate::lexer::token::{ TyKind, KwdKind, BinOpKind, UnaryOpKind };
 
 #[derive(Clone, strum_macros::Display)]
 pub enum AstConditionalKind {
@@ -17,13 +17,13 @@ pub enum AstConditionalKind {
 pub enum AstNode {
     Num(i32),
     Id(String),
-    UnaryExpr {
-        op: OpKind,
-        child: Box<AstNode>,
-    },
-    BinaryExpr {
-        op: OpKind,
+    BinExpr {
+        op: BinOpKind,
         lhs: Box<AstNode>,
+        rhs: Box<AstNode>,
+    },
+    UnaryExpr {
+        op: UnaryOpKind,
         rhs: Box<AstNode>,
     },
     Stmt {
@@ -53,11 +53,17 @@ impl AstNode {
         let ast_string = match self {
             AstNode::Num(n) => format!("({})", n),
             AstNode::Id(s) => format!("({})", s),
-            AstNode::BinaryExpr { op, lhs, rhs } =>
+            AstNode::BinExpr { op, lhs, rhs } =>
                 format!(
                     "({})\n{}\n{}",
                     op,
                     lhs.debug(indents+1),
+                    rhs.debug(indents+1),
+                ),
+            AstNode::UnaryExpr { op, rhs } =>
+                format!(
+                    "({})\n{}",
+                    op,
                     rhs.debug(indents+1),
                 ),
             AstNode::Stmt { kind, expr } => format!("({})\n{}", kind, expr.debug(indents+1)),
@@ -95,7 +101,6 @@ impl AstNode {
                     AstConditionalKind::Else => format!("({})\n{}", kind, body.debug(indents+1)),
                 },
             AstNode::Include(incl_path) => format!("({})", incl_path),
-            _ => unimplemented!("AstNode member, '{}', debug string", self)
         };
 
         format!("{}{}{}", "  ".repeat(indents), self, ast_string)

@@ -92,7 +92,8 @@ pub enum TokenKind {
     Delim(DelimKind),
     BraceOpen(BraceKind),
     BraceClosed(BraceKind),
-    Op(OpKind),
+    BinOp(BinOpKind),
+    UnaryOp(UnaryOpKind),
     Ty(TyKind),
     Kwd(KwdKind),
     EOF,
@@ -120,7 +121,8 @@ impl Literal for TokenKind {
                     BraceKind::Curly => String::from("}"),
                     BraceKind::Square => String::from("]"),
                 },
-            TokenKind::Op(op_kind) => op_kind.literal(),
+            TokenKind::BinOp(op_kind) => op_kind.literal(),
+            TokenKind::UnaryOp(op_kind) => op_kind.literal(),
             TokenKind::Ty(ty_kind) => ty_kind.literal(),
             TokenKind::Kwd(kwd_kind) => kwd_kind.literal(),
             TokenKind::EOF => String::from("\\0"),
@@ -163,7 +165,7 @@ pub enum BraceKind {
 }
 
 #[derive(PartialEq, Debug, Clone, strum_macros::Display)]
-pub enum OpKind {
+pub enum BinOpKind {
     // other operators
     Eql,
 
@@ -181,54 +183,76 @@ pub enum OpKind {
     LtEql,
 }
 
-impl OpKind {
-    pub fn from(tok_kind: &TokenKind) -> Option<OpKind> {
-        match tok_kind {
-            TokenKind::Op(op_kind) => Some(op_kind.clone()),
-            _ => None,
-        }
-    }
-
+impl BinOpKind {
     pub fn prec(&self) -> i32 {
         match *self {
-            OpKind::Mul | OpKind::Div => 5,
-            OpKind::Add | OpKind::Sub => 4,
-            OpKind::Gr | OpKind::Lt | OpKind::GrEql | OpKind::LtEql => 3,
-            OpKind::EqlBool => 2,
-            OpKind::Eql => 1,
+            BinOpKind::Mul | BinOpKind::Div => 5,
+            BinOpKind::Add | BinOpKind::Sub => 4,
+            BinOpKind::Gr | BinOpKind::Lt | BinOpKind::GrEql | BinOpKind::LtEql => 3,
+            BinOpKind::EqlBool => 2,
+            BinOpKind::Eql => 1,
         }
     }
 
     pub fn assoc(&self) -> OpAssoc {
         match *self {
-            OpKind::Eql => OpAssoc::Right,
-            OpKind::Add
-                | OpKind::Sub
-                | OpKind::Mul
-                | OpKind::Div
-                | OpKind::EqlBool
-                | OpKind::Gr
-                | OpKind::Lt
-                | OpKind::GrEql
-                | OpKind::LtEql => OpAssoc::Left,
+            BinOpKind::Eql => OpAssoc::Right,
+            BinOpKind::Add
+                | BinOpKind::Sub
+                | BinOpKind::Mul
+                | BinOpKind::Div
+                | BinOpKind::EqlBool
+                | BinOpKind::Gr
+                | BinOpKind::Lt
+                | BinOpKind::GrEql
+                | BinOpKind::LtEql => OpAssoc::Left,
         }
     }
 }
 
-impl Literal for OpKind {
+impl Literal for BinOpKind {
     fn literal(&self) -> String {
         match &self {
-            OpKind::Eql => String::from("="),
-            OpKind::Add => String::from("+"),
-            OpKind::Sub => String::from("-"),
-            OpKind::Mul => String::from("*"),
-            OpKind::Div => String::from("/"),
-            OpKind::EqlBool => String::from("=="),
-            OpKind::Gr => String::from(">"),
-            OpKind::Lt => String::from("<"),
-            OpKind::GrEql => String::from(">="),
-            OpKind::LtEql => String::from("<="),
+            BinOpKind::Eql => String::from("="),
+            BinOpKind::Add => String::from("+"),
+            BinOpKind::Sub => String::from("-"),
+            BinOpKind::Mul => String::from("*"),
+            BinOpKind::Div => String::from("/"),
+            BinOpKind::EqlBool => String::from("=="),
+            BinOpKind::Gr => String::from(">"),
+            BinOpKind::Lt => String::from("<"),
+            BinOpKind::GrEql => String::from(">="),
+            BinOpKind::LtEql => String::from("<="),
 
+        }
+    }
+}
+
+impl MaybeFrom<&TokenKind> for BinOpKind {
+    fn maybe_from(tok_kind: &TokenKind) -> Option<BinOpKind> {
+        match tok_kind {
+            TokenKind::BinOp(op_kind) => Some(op_kind.clone()),
+            TokenKind::UnaryOp(UnaryOpKind::Neg) => Some(BinOpKind::Sub),
+            _ => None,
+        }
+    }
+
+}
+
+#[derive(PartialEq, Debug, Clone, strum_macros::Display)]
+pub enum UnaryOpKind {
+    // arithmetic operators
+    Neg,
+
+    // boolean operators
+    Not,
+}
+
+impl Literal for UnaryOpKind {
+    fn literal(&self) -> String {
+        match &self {
+            UnaryOpKind::Neg => String::from("-"),
+            UnaryOpKind::Not => String::from("!"),
         }
     }
 }

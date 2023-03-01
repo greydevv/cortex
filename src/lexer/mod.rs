@@ -7,7 +7,8 @@ use crate::lexer::token::{
     TokenKind,
     DelimKind,
     BraceKind,
-    OpKind,
+    BinOpKind,
+    UnaryOpKind,
     TyKind,
     KwdKind,
     Len,
@@ -116,10 +117,10 @@ impl<'a> Lexer<'_> {
     /// 5 -3
     /// ```
     ///
-    /// The Lexer yields three tokens (Num, Op, Num) for the first expression and only two (Num,
-    /// Num) for the second equation. In the case of the second expression, the Parser must expand
-    /// the negative numeric literal into a subtraction operation followed by a positive numeric
-    /// literal, like so:
+    /// The Lexer yields four tokens (Num, BinOp, UnaryOp, Num) for the first expression and only
+    /// two (Num, BinOp, Num) for the second equation. In the case of the second expression, the
+    /// Parser must expand the negative numeric literal into a subtraction operation followed by a
+    /// positive numeric literal, like so:
     ///
     /// ```
     /// 5 -3 // (5) - (3)
@@ -157,30 +158,31 @@ impl<'a> Lexer<'_> {
             ',' => TokenKind::Delim(DelimKind::Comma),
             ';' => TokenKind::Delim(DelimKind::Scolon),
             ':' => TokenKind::Delim(DelimKind::Colon),
-            '+' => TokenKind::Op(OpKind::Add),
+            '+' => TokenKind::BinOp(BinOpKind::Add),
             '-' => 
                 match self.peek_char() {
                     '>' => TokenKind::Arrow,
-                    c if c.is_numeric() => return self.lex_num(),
-                    _ => TokenKind::Op(OpKind::Sub),
+                    c if !c.is_whitespace() => TokenKind::UnaryOp(UnaryOpKind::Neg),
+                    _ => TokenKind::BinOp(BinOpKind::Sub),
                 },
             '=' =>
                 match self.peek_char() {
-                    '=' => TokenKind::Op(OpKind::EqlBool),
-                    _ => TokenKind::Op(OpKind::Eql),
+                    '=' => TokenKind::BinOp(BinOpKind::EqlBool),
+                    _ => TokenKind::BinOp(BinOpKind::Eql),
                 },
             '>' =>
                 match self.peek_char() {
-                    '=' => TokenKind::Op(OpKind::GrEql),
-                    _ => TokenKind::Op(OpKind::Gr)
+                    '=' => TokenKind::BinOp(BinOpKind::GrEql),
+                    _ => TokenKind::BinOp(BinOpKind::Gr)
                 },
             '<' =>
                 match self.peek_char() {
-                    '=' => TokenKind::Op(OpKind::LtEql),
-                    _ => TokenKind::Op(OpKind::Lt)
+                    '=' => TokenKind::BinOp(BinOpKind::LtEql),
+                    _ => TokenKind::BinOp(BinOpKind::Lt)
                 }
-            '*' => TokenKind::Op(OpKind::Mul),
-            '/' => TokenKind::Op(OpKind::Div),
+            '!' => TokenKind::UnaryOp(UnaryOpKind::Not),
+            '*' => TokenKind::BinOp(BinOpKind::Mul),
+            '/' => TokenKind::BinOp(BinOpKind::Div),
             '(' => TokenKind::BraceOpen(BraceKind::Paren),
             ')' => TokenKind::BraceClosed(BraceKind::Paren),
             '{' => TokenKind::BraceOpen(BraceKind::Curly),
@@ -461,5 +463,45 @@ mod tests {
 
         assert!(result.is_err());
         assert_eq!(*(result.err()).unwrap(), expected);
+    }
+
+    #[test]
+    fn unary_negation() -> Result {
+        let src = String::from("-13");
+        let ctx = SessCtx::new(FileHandler::pseudo_fh(src));
+        let mut lexer = Lexer::new(&ctx);
+
+        let expected_toks = vec![
+            Token::new(TokenKind::UnaryOp(UnaryOpKind::Neg), FileSpan::one(FilePos::new(1, 1))),
+            Token::new(TokenKind::Num(13), FileSpan::new(FilePos::new(1, 2), FilePos::new(1, 4))),
+        ];
+
+        for expected in expected_toks {
+            let tok = lexer.next_token()?;
+            assert_eq!(tok.kind, expected.kind);
+            assert_eq!(tok.span, expected.span);
+        }
+
+        Ok(())
+    }
+
+    #[test]
+    fn unary_not() -> Result {
+        let src = String::from("!x");
+        let ctx = SessCtx::new(FileHandler::pseudo_fh(src));
+        let mut lexer = Lexer::new(&ctx);
+
+        let expected_toks = vec![
+            Token::new(TokenKind::UnaryOp(UnaryOpKind::Not), FileSpan::one(FilePos::new(1, 1))),
+            Token::new(TokenKind::Id(String::from("x")), FileSpan::one(FilePos::new(1, 2))),
+        ];
+
+        for expected in expected_toks {
+            let tok = lexer.next_token()?;
+            assert_eq!(tok.kind, expected.kind);
+            assert_eq!(tok.span, expected.span);
+        }
+
+        Ok(())
     }
 }
