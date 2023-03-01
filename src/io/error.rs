@@ -8,10 +8,8 @@ use crate::io::file::{ FileHandler, FileSpan };
 use crate::lexer::token::{ Token, Len };
 use crate::sess::SessCtx;
 
+/// Result alias used throughout compilation stages.
 pub type Result<T = (), E = Box<CortexError>> = std::result::Result<T, E>;
-
-pub enum ErrorFormatter {
-}
 
 #[derive(PartialEq, Debug)]
 pub enum CortexError {
@@ -78,23 +76,26 @@ impl CortexError {
 
 impl CortexError {
 
-    /// Returns a String with related info regarding the offending token(s) in an error.
+    /// Returns a String with related info regarding the offending token(s) causing the error.
     ///
     /// The following snippet shows an example output generated from an error due to a reference to
-    /// an unknown variable at the beginning the fifth line in the file `"path/to/some_file.cx"`.
+    /// an unknown variable.
     ///
-    /// ```
+    /// ```text
     ///   at [5:1] in path/to/some_file.cx
     ///   |
     /// 5 | unknown_var = 10;
     ///   | ^^^^^^^^^^^
     /// ```
     ///
-    /// Above, the offending token is `unknown_var` and is underlined using multiple instances of
-    /// the `^` character.
+    /// The offending token is `'unknown_var'` and is underlined using multiple instances of the `'^'`
+    /// character. Pertinent information is included above the offending source code, such as the
+    /// filename (in this case, `'path/to/some_file.cx'`) and the location at which the error
+    /// happend, formatted as `[line:col]` (in this case, `[5:1]`).
     ///
-    /// The actual error message itself is not included in this output as some errors may not be
-    /// associated with a source (e.g., an error raised for invalid CLI arguments).
+    /// Note that the error message itself is not included in this output as some errors are not
+    /// associated with a piece of source code (e.g., an error raised for invalid compilation
+    /// arguments via the CLI).
     ///
     pub fn underline(span: &FileSpan, file_path: &String) -> Result<String> {
         let fh = FileHandler::new(file_path.clone())?;

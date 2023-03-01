@@ -1,3 +1,5 @@
+//! Helpers for parsing command line arguments.
+
 use clap::{ Arg, ArgAction, command };
 use clap::parser::ArgMatches;
 
