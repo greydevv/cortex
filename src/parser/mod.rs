@@ -273,10 +273,6 @@ impl<'a> Parser<'_> {
         let mut lhs = self.parse_term()?;
 
         loop {
-            // match self.tok.kind {
-            //     TokenKind::BinOp(_) | TokenKind::UnaryOp(_) => (),
-            //     TokenKind::EOF | _ => break,
-            // }
             match BinOpKind::maybe_from(&self.tok.kind) {
                 Some(op_kind) => {
                     let prec = op_kind.prec();
