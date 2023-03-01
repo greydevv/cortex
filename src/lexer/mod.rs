@@ -294,11 +294,12 @@ impl<'a> Lexer<'_> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::io::file::FileHandler;
 
     #[test]
     fn empty_file() -> Result {
-        let src = String::new();
-        let mut lexer = Lexer::new(&src);
+        let ctx = SessCtx::new(FileHandler::pseudo_fh(String::new()));
+        let mut lexer = Lexer::new(&ctx);
 
         let tok = lexer.next_token()?;
         assert_eq!(tok.kind, TokenKind::EOF);
@@ -309,7 +310,8 @@ mod tests {
     #[test]
     fn leading_whitespace() -> Result {
         let src = String::from("  \n\n");
-        let mut lexer = Lexer::new(&src);
+        let ctx = SessCtx::new(FileHandler::pseudo_fh(src));
+        let mut lexer = Lexer::new(&ctx);
 
         let tok = lexer.next_token()?;
         assert_eq!(tok.kind, TokenKind::EOF);
@@ -320,7 +322,8 @@ mod tests {
     #[test]
     fn trailing_whitespace() -> Result {
         let src = String::from(";\n\n  ");
-        let mut lexer = Lexer::new(&src);
+        let ctx = SessCtx::new(FileHandler::pseudo_fh(src));
+        let mut lexer = Lexer::new(&ctx);
 
         lexer.next_token()?;
         let tok = lexer.next_token()?;
@@ -332,7 +335,8 @@ mod tests {
     #[test]
     fn leading_and_trailing_whitespace() -> Result {
         let src = String::from("  \n\n  \n  ");
-        let mut lexer = Lexer::new(&src);
+        let ctx = SessCtx::new(FileHandler::pseudo_fh(src));
+        let mut lexer = Lexer::new(&ctx);
 
         let tok = lexer.next_token()?;
         assert_eq!(tok.kind, TokenKind::EOF);
@@ -343,7 +347,9 @@ mod tests {
     #[test]
     fn keywords() -> Result {
         let src = String::from("func include for");
-        let mut lexer = Lexer::new(&src);
+        let ctx = SessCtx::new(FileHandler::pseudo_fh(src));
+        let mut lexer = Lexer::new(&ctx);
+
         let expected_toks = vec![
             Token::new(TokenKind::Kwd(KwdKind::Func), FileSpan::new(FilePos::new(1, 1), FilePos::new(1, 5))),
             Token::new(TokenKind::Kwd(KwdKind::Include), FileSpan::new(FilePos::new(1, 6), FilePos::new(1, 13))),
@@ -363,17 +369,27 @@ mod tests {
     fn unterminated_string_literal() {
         // Lexer will encounter EOF before a closing double-quote
         let src = String::from("\"Hello, world!");
-        let mut lexer = Lexer::new(&src);
+        let ctx = SessCtx::new(FileHandler::pseudo_fh(src));
+        let mut lexer = Lexer::new(&ctx);
+
         let result = lexer.next_token();
-        let expected = CortexError::syntax_err("unterminated string literal", FileSpan::new(FilePos::new(1, 1), FilePos::new(1, 15)));
+        let expected = CortexError::syntax_err(
+            &ctx,
+            "unterminated string literal",
+            FileSpan::new(FilePos::new(1, 1), FilePos::new(1, 15)),
+            None,
+        );
 
         assert!(result.is_err());
-        assert_eq!(result.err().unwrap(), expected);
+        assert_eq!(*(result.err()).unwrap(), expected);
     }
 
     #[test]
     fn closed_braces() -> Result {
         let src = String::from("([\n\n\n()]) [] {\n{{[{}]}\n}\n}");
+        let ctx = SessCtx::new(FileHandler::pseudo_fh(src));
+        let mut lexer = Lexer::new(&ctx);
+
         let expected_toks = vec![
             Token::new(TokenKind::BraceOpen(BraceKind::Paren), FileSpan::one(FilePos::new(1, 1))),
             Token::new(TokenKind::BraceOpen(BraceKind::Square), FileSpan::one(FilePos::new(1, 2))),
@@ -395,7 +411,6 @@ mod tests {
             Token::new(TokenKind::BraceClosed(BraceKind::Curly), FileSpan::one(FilePos::new(7, 1))),
             Token::eof(FilePos::new(7,2)),
         ];
-        let mut lexer = Lexer::new(&src);
 
         for expected in expected_toks {
             let tok = lexer.next_token()?;
@@ -408,31 +423,43 @@ mod tests {
     #[test]
     fn unclosed_brace() {
         let src = String::from("(\n{)");
-        let mut lexer = Lexer::new(&src);
+        let ctx = SessCtx::new(FileHandler::pseudo_fh(src));
+        let mut lexer = Lexer::new(&ctx);
 
         for _ in 0..2 {
             assert!(lexer.next_token().is_ok());
         }
 
-        let expected = CortexError::syntax_err("unclosed '{'", FileSpan::one(FilePos::new(2, 1)));
+        let expected = CortexError::syntax_err(
+            &ctx,
+            "unclosed '{'",
+            FileSpan::one(FilePos::new(2, 1)),
+            None,
+        );
         let result = lexer.next_token();
 
         assert!(result.is_err());
-        assert_eq!(result.err().unwrap(), expected);
+        assert_eq!(*(result.err()).unwrap(), expected);
     }
 
     #[test]
     fn unopened_brace() {
         let src = String::from("(\n})");
-        let mut lexer = Lexer::new(&src);
+        let ctx = SessCtx::new(FileHandler::pseudo_fh(src));
+        let mut lexer = Lexer::new(&ctx);
 
         // no need to loop, first next_token is only call that should succeed
         assert!(lexer.next_token().is_ok());
 
-        let expected = CortexError::syntax_err("unopened '}'", FileSpan::one(FilePos::new(2, 1)));
+        let expected = CortexError::syntax_err(
+            &ctx,
+            "unopened '}'",
+            FileSpan::one(FilePos::new(2, 1)),
+            None,
+        );
         let result = lexer.next_token();
 
         assert!(result.is_err());
-        assert_eq!(result.err().unwrap(), expected);
+        assert_eq!(*(result.err()).unwrap(), expected);
     }
 }

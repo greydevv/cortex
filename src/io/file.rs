@@ -121,6 +121,16 @@ impl fmt::Display for FilePos {
 }
 
 #[cfg(test)]
+impl FileHandler {
+    pub fn pseudo_fh(src: String) -> FileHandler {
+        FileHandler {
+            file_path: String::new(),
+            src,
+        }
+    }
+}
+
+#[cfg(test)]
 mod tests {
     use super::*;
 
@@ -136,6 +146,6 @@ mod tests {
         let expected = CortexError::FileIOError(format!("'iamsomenonexistentfile' does not exist"));
 
         assert!(result.is_err());
-        assert_eq!(result.err().unwrap(), expected);
+        assert_eq!(*(result.err()).unwrap(), expected);
     }
 }
