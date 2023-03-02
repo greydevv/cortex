@@ -10,7 +10,10 @@ pub enum AstConditionalKind {
         expr: Box<AstNode>,
         other: Box<AstNode>,
     },
-    Else
+    Else,
+    While {
+        expr: Box<AstNode>
+    },
 }
 
 #[derive(Clone, strum_macros::Display)]
@@ -45,7 +48,7 @@ pub enum AstNode {
 }
 
 impl AstNode {
-    pub fn debug_format(&self) -> String {
+    pub fn debug_string(&self) -> String {
         self.debug(0)
     }
 
@@ -66,8 +69,19 @@ impl AstNode {
                     op,
                     rhs.debug(indents+1),
                 ),
-            AstNode::Stmt { kind, expr } => format!("({})\n{}", kind, expr.debug(indents+1)),
-            AstNode::Func { id, ret_ty, params, body } if params.is_empty() => format!("({}) -> {}\n{}", id, ret_ty, body.debug(indents+1)),
+            AstNode::Stmt { kind, expr } =>
+                format!(
+                    "({})\n{}",
+                    kind,
+                    expr.debug(indents+1)
+                ),
+            AstNode::Func { id, ret_ty, params, body } if params.is_empty() =>
+                format!(
+                    "({}) -> {}\n{}",
+                    id,
+                    ret_ty,
+                    body.debug(indents+1)
+                ),
             AstNode::Func { id, ret_ty, params, body } => {
                 let mut params_str = String::new();
                 for (i, param) in params.iter().enumerate() {
@@ -83,10 +97,10 @@ impl AstNode {
             AstNode::Compound(children) => {
                 let mut children_str = String::new();
                 for (i, child) in children.iter().enumerate() {
-                    let child_str = if i == 0 {
+                    let child_str = if i == children.len() - 1 {
                         format!("{}", child.debug(indents))
                     } else {
-                        format!("\n{}", child.debug(indents))
+                        format!("{}\n", child.debug(indents))
                     };
                     children_str = children_str + &child_str;
                 }
@@ -96,11 +110,37 @@ impl AstNode {
             },
             AstNode::Cond { kind, body } =>
                 match kind {
-                    AstConditionalKind::SoloIf { expr } => format!("({})\n{}\n{}", kind, expr.debug(indents+1), body.debug(indents+1)),
-                    AstConditionalKind::If { expr, other } => format!("({})\n{}\n{}\n{}", kind, expr.debug(indents+1), body.debug(indents+1), other.debug(indents+1)),
-                    AstConditionalKind::Else => format!("({})\n{}", kind, body.debug(indents+1)),
+                    AstConditionalKind::SoloIf { expr } =>
+                        format!(
+                            "({})\n{}\n{}",
+                            kind,
+                            expr.debug(indents+1),
+                            body.debug(indents+1),
+                        ),
+                    AstConditionalKind::If { expr, other } =>
+                        format!(
+                            "({})\n{}\n{}\n{}",
+                            kind,
+                            expr.debug(indents+1),
+                            body.debug(indents+1),
+                            other.debug(indents+2),
+                        ),
+                    AstConditionalKind::Else =>
+                        format!(
+                            "({})\n{}",
+                            kind,
+                            body.debug(indents+1),
+                        ),
+                    AstConditionalKind::While { expr } =>
+                        format!(
+                            "({})\n{}\n{}",
+                            kind,
+                            expr.debug(indents+1),
+                            body.debug(indents+1)
+                        ),
                 },
-            AstNode::Include(incl_path) => format!("({})", incl_path),
+            // AstNode::Include(incl_path) => format!("({})", incl_path),
+            _ => String::new(),
         };
 
         format!("{}{}{}", "  ".repeat(indents), self, ast_string)

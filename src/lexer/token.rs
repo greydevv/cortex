@@ -364,6 +364,7 @@ pub enum KwdKind {
     Ret,
     If,
     Else, // don't need else if, parser just peeks for If if on Else
+    While,
 }
 
 impl MaybeFrom<String> for KwdKind {
@@ -376,6 +377,7 @@ impl MaybeFrom<String> for KwdKind {
             "ret" => Some(KwdKind::Ret),
             "if" => Some(KwdKind::If),
             "else" => Some(KwdKind::Else),
+            "while" => Some(KwdKind::While),
             _ => None,
         }
     }
@@ -391,6 +393,7 @@ impl Literal for KwdKind {
             KwdKind::Ret => String::from("ret"),
             KwdKind::If => String::from("if"),
             KwdKind::Else => String::from("else"),
+            KwdKind::While => String::from("while"),
         }
     }
 }

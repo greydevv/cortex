@@ -123,9 +123,21 @@ impl<'a> Parser<'_> {
                     help: None,
                 }.into());
             }
+            KwdKind::While => self.parse_while()?,
             _ => unimplemented!("parse_kwd: '{}'", *kwd_kind),
         };
         Ok(node)
+    }
+
+    fn parse_while(&mut self) -> Result<AstNode> {
+        self.advance()?; // skip 'while' kwd
+        let expr = self.parse_expr()?;
+        let body = self.parse_compound()?;
+        let kind = AstConditionalKind::While { expr: Box::new(expr) };
+        Ok(AstNode::Cond {
+            kind,
+            body: Box::new(body),
+        })
     }
 
     fn parse_if(&mut self) -> Result<AstNode> {

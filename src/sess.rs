@@ -36,7 +36,7 @@ impl Session {
         let mut parser = Parser::new(&ctx)?;
         parser.parse().and_then(|tree| {
             for node in tree {
-                println!("{}", node.debug_format());
+                println!("{}", node.debug_string());
             }
             Ok(())
         })?;
