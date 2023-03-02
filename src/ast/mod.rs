@@ -139,8 +139,7 @@ impl AstNode {
                             body.debug(indents+1)
                         ),
                 },
-            // AstNode::Include(incl_path) => format!("({})", incl_path),
-            _ => String::new(),
+            AstNode::Include(incl_path) => format!("({})", incl_path),
         };
 
         format!("{}{}{}", "  ".repeat(indents), self, ast_string)
