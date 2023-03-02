@@ -44,6 +44,7 @@ pub trait MaybeFrom<T>: Sized {
     fn maybe_from(value: &T) -> Option<Self>;
 }
 
+/// String representations of how tokens are represented in source code.
 pub trait Literal {
     fn literal(&self) -> String;
 }
@@ -109,23 +110,40 @@ impl fmt::Display for Token {
 /// Different possible kinds of [`Token`].
 #[derive(PartialEq, Debug, Clone, strum_macros::Display)]
 pub enum TokenKind {
+    /// Numeric literals
     Num(i32),
+    /// Identifiers
     Id(String),
+    /// String literals
     String(String),
+    /// Right-facing arrow (denoting return types)
     Arrow,
+    /// Delimiters (punctuation excluding braces)
     Delim(DelimKind),
+    /// Opening braces
     BraceOpen(BraceKind),
+    /// Closing braces
     BraceClosed(BraceKind),
+    /// Binary operators
     BinOp(BinOpKind),
+    /// Unary operators
     UnaryOp(UnaryOpKind),
+    /// Built-in type literals
     Ty(TyKind),
+    /// Built-in keywords
     Kwd(KwdKind),
+    /// End-of-file
     EOF,
     Unknown(char),
     Dummy,
 }
 
 impl Literal for TokenKind {
+    /// # Examples
+    /// ```
+    /// let tok_kind = TokenKind::Id("foo".into());
+    /// tok_kind.literal() // "foo"
+    /// ```
     fn literal(&self) -> String {
         match self {
             TokenKind::Num(n) => n.to_string(),
@@ -208,6 +226,7 @@ pub enum BinOpKind {
 }
 
 impl BinOpKind {
+    /// Returns the precedence of the `BinOpKind`
     pub fn prec(&self) -> i32 {
         match *self {
             BinOpKind::Mul | BinOpKind::Div => 5,
@@ -218,6 +237,7 @@ impl BinOpKind {
         }
     }
 
+    /// Returns the associativity of the `BinOpKind`
     pub fn assoc(&self) -> OpAssoc {
         match *self {
             BinOpKind::Eql => OpAssoc::Right,
@@ -253,7 +273,7 @@ impl Literal for BinOpKind {
 }
 
 impl MaybeFrom<TokenKind> for BinOpKind {
-    /// Attempts to convert a generic [`TokenKind`] into a [`BinOpKind`].
+    /// Attempts to convert a generic [`TokenKind`] into a `BinOpKind`.
     ///
     /// It is possible for a unary negation operation to be converted into a binary subtraction
     /// operator. Take the following example.
@@ -262,7 +282,13 @@ impl MaybeFrom<TokenKind> for BinOpKind {
     /// 16 -3
     /// 16 + -3
     /// ```
-    /// Above, the two arithmetic equations are equivalent.
+    /// Above, the two equations are mathematically equivalent. But they are not syntactically
+    /// equivalent. The first equation yields three tokens whereas the second equation yields four
+    /// tokens.
+    ///
+    /// Furthermore, the first equation's '-' will be seen as a unary negation since it is not
+    /// followed by whitespace. However, it should be converted into a binary subtraction. This is
+    /// where `BinOpKind::maybe_from(possible_unary_op)` can be used.
     fn maybe_from(tok_kind: &TokenKind) -> Option<BinOpKind> {
         match tok_kind {
             TokenKind::BinOp(op_kind) => Some(op_kind.clone()),
@@ -275,10 +301,9 @@ impl MaybeFrom<TokenKind> for BinOpKind {
 
 #[derive(PartialEq, Debug, Clone, strum_macros::Display)]
 pub enum UnaryOpKind {
-    // arithmetic operators
+    /// arithmetic negation (e.g., negated `x` is `-x`)
     Neg,
-
-    // boolean operators
+    /// logical not
     Not,
 }
 
