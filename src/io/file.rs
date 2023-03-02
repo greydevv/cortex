@@ -91,7 +91,7 @@ impl Len for FileSpan {
 
 impl fmt::Display for FileSpan {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-      write!(f, "{} -> {}", self.beg, self.end)
+        write!(f, "{} -> {}", self.beg, self.end)
     }
 }
 
