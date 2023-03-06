@@ -9,7 +9,7 @@ edition = "2021"
 colored = "2.0.0"
 strum = "0.24"
 strum_macros = "0.24"
-clap = { version = "4.1.6", features=["derive", "cargo"] }
+clap = { version = "4.1.6", features=["derive", "error-context", "cargo"] }
 
 [lib]
 doctest = false

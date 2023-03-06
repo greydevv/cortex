@@ -1,6 +1,7 @@
 use crate::io::error::Result;
 use crate::io::file::FileHandler;
 use crate::parser::Parser;
+use crate::lexer::Lexer;
 use crate::args::parse_args;
 
 pub struct SessCtx {
@@ -27,12 +28,15 @@ impl Session {
     }
 
     // Only pass context to those who update it
-    // Can pass context to error in teh catch method if needed
+    // Can pass context to error in the catch method if needed
     fn compile() -> Result {
-        let _args = parse_args()?;
+        let args = parse_args()?;
         let ctx = SessCtx::new(
             FileHandler::new(String::from("samples/debug.cx"))?
         );
+        if args.get_flag("only-display-tokens") {
+            return Session::only_lexer_tokens(&ctx);
+        }
         let mut parser = Parser::new(&ctx)?;
         parser.parse().and_then(|tree| {
             for node in tree {
@@ -40,6 +44,18 @@ impl Session {
             }
             Ok(())
         })?;
+        Ok(())
+    }
+
+    fn only_lexer_tokens(ctx: &SessCtx) -> Result {
+        let mut lexer = Lexer::new(ctx);
+        loop {
+            let tok = lexer.next_token()?;
+            println!("{}", tok);
+            if lexer.eof() {
+                break;
+            }
+        }
         Ok(())
     }
 }

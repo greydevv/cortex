@@ -3,6 +3,8 @@ use std::error::Error;
 use std::convert::From;
 
 use colored::Colorize;
+use clap::error::ContextKind;
+use clap::error::Error as ClapError;
 
 use crate::io::file::{ FileHandler, FileSpan };
 use crate::lexer::token::{ Token, Len };
@@ -22,6 +24,18 @@ pub enum CortexError {
         help: Option<String>,
     },
     FileIOError(String),
+}
+
+impl From<ClapError> for CortexError {
+    fn from(value: ClapError) -> CortexError {
+        let (kind, val) = value.context().nth(0).unwrap();
+        match kind {
+            ContextKind::InvalidArg => {
+                CortexError::ArgError(format!("invalid argument '{}'", val))
+            }
+            _ => unimplemented!()
+        }
+    }
 }
 
 impl CortexError {
