@@ -88,6 +88,20 @@ impl<'a> Lexer<'_> {
         }
     }
 
+    pub fn peek_token(&mut self) -> Result<Token> {
+        // save state
+        let prev_pos = self.pos;
+        let prev_c = self.c;
+        let prev_iter = self.chars.clone();
+        // get next token
+        let res = self.next_token();
+        // restore state
+        self.chars = prev_iter;
+        self.c = prev_c;
+        self.pos = prev_pos;
+        res
+    }
+
     fn lex_alpha(&mut self) -> Token {
         let mut val = String::new();
         let beg_pos = self.pos;
