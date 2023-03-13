@@ -3,6 +3,7 @@ use crate::io::file::FileHandler;
 use crate::parser::Parser;
 use crate::lexer::Lexer;
 use crate::args::parse_args;
+use crate::ast::validate::Validator;
 
 pub struct SessCtx {
     pub fh: FileHandler,
@@ -38,10 +39,12 @@ impl Session {
             return Session::only_lexer_tokens(&ctx);
         }
         let mut parser = Parser::new(&ctx)?;
-        parser.parse().and_then(|tree| {
-            for node in tree {
+        parser.parse().and_then(|ref mut tree| {
+            for node in &mut *tree {
                 println!("{}", node.debug_string());
             }
+            let mut vd = Validator::new();
+            vd.validate(tree)?;
             Ok(())
         })?;
         Ok(())

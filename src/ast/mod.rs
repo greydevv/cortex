@@ -1,5 +1,17 @@
 use crate::lexer::token::{ TyKind, KwdKind, BinOpKind, UnaryOpKind };
 
+pub mod validate;
+
+#[derive(PartialEq, Clone, strum_macros::Display)]
+pub enum IdentCtx {
+    /// Variable declaration
+    Decl,
+    /// Variable reference
+    Ref,
+    /// Function parameter
+    Param,
+}
+
 #[derive(Clone, strum_macros::Display)]
 pub enum AstConditionalKind {
     SoloIf {
@@ -19,7 +31,7 @@ pub enum AstConditionalKind {
 #[derive(Clone, strum_macros::Display)]
 pub enum AstNode {
     Num(i32),
-    Id(String),
+    Id(String, TyKind, IdentCtx),
     BinExpr {
         op: BinOpKind,
         lhs: Box<AstNode>,
@@ -55,7 +67,7 @@ impl AstNode {
     fn debug(&self, indents: usize) -> String {
         let ast_string = match self {
             AstNode::Num(n) => format!("({})", n),
-            AstNode::Id(s) => format!("({})", s),
+            AstNode::Id(id, ty_kind, ident_ctx) => format!("({}, {}, {})", id, ty_kind, ident_ctx),
             AstNode::BinExpr { op, lhs, rhs } =>
                 format!(
                     "({})\n{}\n{}",
@@ -75,24 +87,21 @@ impl AstNode {
                     kind,
                     expr.debug(indents+1)
                 ),
-            AstNode::Func { id, ret_ty, params, body } if params.is_empty() =>
-                format!(
-                    "({}) -> {}\n{}",
-                    id,
-                    ret_ty,
-                    body.debug(indents+1)
-                ),
             AstNode::Func { id, ret_ty, params, body } => {
-                let mut params_str = String::new();
-                for (i, param) in params.iter().enumerate() {
-                    let param_str = if i == params.len()-1 {
-                        format!("{}", param.debug(0))
-                    } else {
-                        format!("{}, ", param.debug(0))
-                    };
-                    params_str = params_str + &param_str;
+                if params.is_empty() {
+                    format!("({}) -> {}\n{}", id, ret_ty, body.debug(indents+1))
+                } else {
+                    let mut params_str = String::new();
+                    for (i, param) in params.iter().enumerate() {
+                        let param_str = if i == params.len()-1 {
+                            format!("{}", param.debug(0))
+                        } else {
+                            format!("{}, ", param.debug(0))
+                        };
+                        params_str = params_str + &param_str;
+                    }
+                    format!("({}: {}) -> {}\n{}", id, params_str, ret_ty, body.debug(indents+1))
                 }
-                format!("({}: {}) -> {}\n{}", id, params_str, ret_ty, body.debug(indents+1))
             },
             AstNode::Compound(children) => {
                 let mut children_str = String::new();

@@ -2,11 +2,23 @@ use std::fmt;
 
 use crate::io::file::{ FilePos, FileSpan };
 
-// pub enum Count {
-//     Optional,
-//     One,
-//     Many(u32),
-// }
+pub enum TokenPresence {
+    Optional(Count),
+    Required(Count),
+}
+
+// 0-n (optional)
+// 0-inf (optional)
+// n-n
+// n
+// inf
+
+pub enum Count {
+    Range(std::ops::Range<u8>),
+    SomeToInf(u8),
+    Some(u8),
+    Inf,
+}
 
 // we can create a grammar from structures like this
 // in parser, create a Vec<Token> and ExpectedToken.tok will reference one of those tokens
@@ -326,14 +338,13 @@ pub enum OpAssoc {
 pub enum TyKind {
     Int(usize),
     Void,
+    Infer,
+    Lookup,
 }
 
 impl fmt::Display for TyKind {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        match self {
-            TyKind::Int(size) => write!(f, "i{}", size),
-            TyKind::Void => write!(f, "void"),
-        }
+        write!(f, "{}", self.literal())
     }
 }
 
@@ -351,6 +362,8 @@ impl Literal for TyKind {
         match &self {
             TyKind::Int(size) => format!("i{}", size),
             TyKind::Void => String::from("void"),
+            TyKind::Infer => String::from("INFER"),
+            TyKind::Lookup => String::from("LOOKUP"),
         }
     }
 }

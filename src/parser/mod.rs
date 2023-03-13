@@ -1,6 +1,6 @@
 use crate::io::error::{ Result, CortexError };
 use crate::lexer::Lexer;
-use crate::ast::{ AstNode, AstConditionalKind };
+use crate::ast::{ AstNode, IdentCtx, AstConditionalKind };
 use crate::lexer::token::{
     Token,
     TokenKind,
@@ -192,9 +192,51 @@ impl<'a> Parser<'_> {
         })
     }
 
+    fn parse_type_annotation(&mut self, ident_ctx: IdentCtx) -> Result<AstNode> {
+        let id = self.expect_id(format!("expected identifier but got '{}'", self.tok.value()))?;
+        self.eat(TokenKind::Delim(DelimKind::Colon))?;
+        if let TokenKind::Ty(ty_kind) = self.tok.kind.clone() {
+            self.advance()?; // skip type
+            Ok(AstNode::Id(id, ty_kind, ident_ctx))
+        } else {
+            Err(CortexError::SyntaxError {
+                file_path: self.ctx.file_path(),
+                msg: format!("expected type but got '{}'", self.tok.value()),
+                span: self.tok.span,
+                help: None,
+            }.into())
+        }
+    }
+
     fn parse_let(&mut self) -> Result<AstNode> {
         self.advance()?; // skip 'let' kwd
-        let expr = self.parse_expr()?;
+        let lhs = self.lexer.peek_token().and_then(|peek_tok| -> Result<AstNode> {
+            match peek_tok.kind {
+                TokenKind::Delim(DelimKind::Colon) => self.parse_type_annotation(IdentCtx::Decl),
+                TokenKind::BinOp(BinOpKind::Eql) =>
+                    Ok(AstNode::Id(
+                        self.expect_id(format!("expected identifier but got '{}'", self.tok.value()))?,
+                        TyKind::Infer,
+                        IdentCtx::Decl,
+                    )),
+                _ =>
+                    Err(CortexError::SyntaxError {
+                        file_path: self.ctx.file_path(),
+                        msg: format!("expected type annotation or equals sign but got '{}'", peek_tok.value()),
+                        span: peek_tok.span,
+                        help: None,
+                    }.into())
+            }
+        })?;
+        self.eat(TokenKind::BinOp(BinOpKind::Eql))?;
+        // TODO: a bit hacky, but works for now. essentially, the left-hand side of the let
+        // expression is parsed here instead of self.parse_expr() so the type annotation can be
+        // captured properly. then, an expr is just returned anyways.
+        let expr = AstNode::BinExpr {
+            op: BinOpKind::Eql,
+            lhs: Box::new(lhs),
+            rhs: Box::new(self.parse_expr()?),
+        };
         self.eat(TokenKind::Delim(DelimKind::Scolon))?;
         return Ok(AstNode::Stmt {
             kind: KwdKind::Let,
@@ -204,13 +246,13 @@ impl<'a> Parser<'_> {
 
     fn parse_func(&mut self) -> Result<AstNode> {
         self.advance()?; // skip 'func' kwd
-        let func_id = self.expect_id(format!("expected function name but found '{}' instead", self.tok.value()))?;
+        let func_id = self.expect_id(format!("expected function name but got '{}'", self.tok.value()))?;
         self.eat(TokenKind::BraceOpen(BraceKind::Paren))?;
         let mut params = Vec::new();
         if let TokenKind::Id(_) = self.tok.kind {
             loop {
-                let param_id = self.expect_id(format!("expected parameter name after comma, but found '{}' instead", self.tok.value()))?;
-                params.push(Box::new(AstNode::Id(param_id)));
+                let param_id = self.parse_type_annotation(IdentCtx::Param)?;
+                params.push(Box::new(param_id));
                 match &self.tok.kind {
                     TokenKind::Delim(DelimKind::Comma) => (),
                     _ => break,
@@ -255,7 +297,7 @@ impl<'a> Parser<'_> {
                     rhs: Box::new(self.parse_term()?),
                 });
             },
-            TokenKind::Id(ref id) => AstNode::Id(id.clone()),
+            TokenKind::Id(ref id) => AstNode::Id(id.clone(), TyKind::Lookup, IdentCtx::Ref),
             TokenKind::BraceOpen(ref brace_kind) if *brace_kind == BraceKind::Paren => {
                 // pass opening parenthesis
                 self.advance()?;
