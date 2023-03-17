@@ -1,6 +1,16 @@
 use crate::io::error::{ Result, CortexError };
 use crate::lexer::Lexer;
-use crate::ast::{ AstNode, IdentCtx, AstConditionalKind };
+use crate::ast::{
+    AstNodeNew,
+    Func,
+    Expr,
+    Ident,
+    ExprKind,
+    LitKind,
+    StmtKind,
+    IdentCtx,
+    CondKind,
+};
 use crate::lexer::token::{
     Token,
     TokenKind,
@@ -34,13 +44,15 @@ impl<'a> Parser<'_> {
         })
     }
 
-    pub fn parse(&mut self) -> Result<Vec<Box<AstNode>>> {
+    pub fn parse(&mut self) -> Result<Vec<Box<AstNodeNew>>> {
         let mut tree = Vec::new();
         while !self.tok.is_eof() {
             if let TokenKind::Kwd(kwd_kind) = &self.tok.kind {
                 let child = match kwd_kind.clone() {
-                    KwdKind::Include => self.parse_include()?,
-                    KwdKind::Func => self.parse_func()?,
+                    KwdKind::Include => 
+                        AstNodeNew::Expr(self.parse_include()?),
+                    KwdKind::Func =>
+                        AstNodeNew::Func(self.parse_func()?),
                     _ => unimplemented!("error message for bad start keyword: '{}'", kwd_kind)
                 };
                 tree.push(Box::new(child));
@@ -56,7 +68,7 @@ impl<'a> Parser<'_> {
         Ok(tree)
     }
 
-    fn parse_compound(&mut self) -> Result<AstNode> {
+    fn parse_compound(&mut self) -> Result<Expr> {
         let mut children = Vec::new();
         self.eat(TokenKind::BraceOpen(BraceKind::Curly))?;
         loop {
@@ -64,7 +76,7 @@ impl<'a> Parser<'_> {
                 TokenKind::Id(_) | TokenKind::Num(_) => {
                     let expr = self.parse_expr()?;
                     self.eat(TokenKind::Delim(DelimKind::Scolon))?;
-                    expr
+                    AstNodeNew::Expr(expr)
                 },
                 TokenKind::Kwd(ref kwd_kind) => self.parse_kwd(kwd_kind)?,
                 TokenKind::BraceClosed(BraceKind::Curly) => {
@@ -75,13 +87,15 @@ impl<'a> Parser<'_> {
             };
             children.push(Box::new(child));
         }
-        Ok(AstNode::Compound(children))
+        Ok(Expr::new(ExprKind::Compound(children)))
     }
 
-    fn parse_include(&mut self) -> Result<AstNode> {
+    fn parse_include(&mut self) -> Result<Expr> {
         self.advance()?; // skip 'include' kwd
         if let TokenKind::String(_) = self.tok.kind {
-            let incl = AstNode::Include(self.tok.value());
+            let incl = Expr::new(ExprKind::Stmt(
+                StmtKind::Incl(self.tok.value())
+            ));
             self.advance()?; // skip string
             self.eat(TokenKind::Delim(DelimKind::Scolon))?;
             Ok(incl)
@@ -95,20 +109,13 @@ impl<'a> Parser<'_> {
         }
     }
 
-    fn parse_kwd(&mut self, kwd_kind: &KwdKind) -> Result<AstNode> {
+    fn parse_kwd(&mut self, kwd_kind: &KwdKind) -> Result<AstNodeNew> {
         let node = match *kwd_kind {
+            // early return for function
+            KwdKind::Func => return Ok(AstNodeNew::Func(self.parse_func()?)),
             KwdKind::Include => self.parse_include()?,
-            KwdKind::Func => self.parse_func()?,
             KwdKind::Let => self.parse_let()?,
-            KwdKind::Ret => {
-                self.advance()?; // skip 'ret' kwd
-                let expr = self.parse_expr()?;
-                self.eat(TokenKind::Delim(DelimKind::Scolon))?;
-                AstNode::Stmt {
-                    kind: kwd_kind.clone(),
-                    expr: Box::new(expr),
-                }
-            },
+            KwdKind::Ret => self.parse_ret()?,
             KwdKind::If => self.parse_if()?,
             KwdKind::Else => {
                 self.advance()?;
@@ -124,23 +131,21 @@ impl<'a> Parser<'_> {
                 }.into());
             }
             KwdKind::While => self.parse_while()?,
-            _ => unimplemented!("parse_kwd: '{}'", *kwd_kind),
+            KwdKind::For => unimplemented!("parsing of for loop"),
         };
-        Ok(node)
+        Ok(AstNodeNew::Expr(node))
     }
 
-    fn parse_while(&mut self) -> Result<AstNode> {
+    fn parse_while(&mut self) -> Result<Expr> {
         self.advance()?; // skip 'while' kwd
         let expr = self.parse_expr()?;
         let body = self.parse_compound()?;
-        let kind = AstConditionalKind::While { expr: Box::new(expr) };
-        Ok(AstNode::Cond {
-            kind,
-            body: Box::new(body),
-        })
+        Ok(Expr::new(ExprKind::Cond(
+            CondKind::While(Box::new(expr), Box::new(body))
+        )))
     }
 
-    fn parse_if(&mut self) -> Result<AstNode> {
+    fn parse_if(&mut self) -> Result<Expr> {
         self.advance()?; // skip 'if' kwd
         match self.tok.kind {
             TokenKind::BraceOpen(BraceKind::Curly) =>
@@ -158,22 +163,24 @@ impl<'a> Parser<'_> {
             TokenKind::Kwd(KwdKind::Else) => {
                 self.advance()?;
                 match self.tok.kind {
-                    TokenKind::Kwd(KwdKind::If) => {
-                        AstConditionalKind::If {
-                            expr: Box::new(expr),
-                            other: Box::new(self.parse_if()?)
-                        }
-                    },
+                    TokenKind::Kwd(KwdKind::If) =>
+                        // 'else if'
+                        CondKind::If(
+                            Box::new(expr),
+                            Box::new(body),
+                            Some(Box::new(self.parse_if()?)),
+                        ),
                     TokenKind::BraceOpen(BraceKind::Curly) => {
+                        // 'else' (no expr)
                         let else_body = self.parse_compound()?;
-                        let else_ast = AstNode::Cond {
-                            kind: AstConditionalKind::Else,
-                            body: Box::new(else_body),
-                        };
-                        AstConditionalKind::If {
-                            expr: Box::new(expr),
-                            other: Box::new(else_ast),
-                        }
+                        let else_ast = Expr::new(ExprKind::Cond(
+                            CondKind::Else(Box::new(else_body))
+                        ));
+                        CondKind::If(
+                            Box::new(expr),
+                            Box::new(body),
+                            Some(Box::new(else_ast)),
+                        )
                     },
                     _ =>
                         return Err(CortexError::SyntaxError {
@@ -184,20 +191,17 @@ impl<'a> Parser<'_> {
                         }.into())
                 }
             },
-            _ => AstConditionalKind::SoloIf { expr: Box::new(expr) },
+            _ => CondKind::If(Box::new(expr), Box::new(body), None),
         };
-        Ok(AstNode::Cond {
-            kind,
-            body: Box::new(body),
-        })
+        Ok(Expr::new(ExprKind::Cond(kind)))
     }
 
-    fn parse_type_annotation(&mut self, ident_ctx: IdentCtx) -> Result<AstNode> {
-        let id = self.expect_id(format!("expected identifier but got '{}'", self.tok.value()))?;
+    fn parse_type_annotation(&mut self, with_ident_ctx: IdentCtx) -> Result<Ident> {
+        let ident = self.expect_id(format!("expected identifier but got '{}'", self.tok.value()))?;
         self.eat(TokenKind::Delim(DelimKind::Colon))?;
         if let TokenKind::Ty(ty_kind) = self.tok.kind.clone() {
             self.advance()?; // skip type
-            Ok(AstNode::Id(id, ty_kind, ident_ctx))
+            Ok(Ident::new(&ident, ty_kind, with_ident_ctx))
         } else {
             Err(CortexError::SyntaxError {
                 file_path: self.ctx.file_path(),
@@ -208,16 +212,24 @@ impl<'a> Parser<'_> {
         }
     }
 
-    fn parse_let(&mut self) -> Result<AstNode> {
+    fn parse_ret(&mut self) -> Result<Expr> {
+        self.advance()?; // skip 'ret' kwd
+        let expr = self.parse_expr()?;
+        self.eat(TokenKind::Delim(DelimKind::Scolon))?;
+        Ok(Expr::new(ExprKind::Stmt(StmtKind::Ret(Some(Box::new(expr))))))
+    }
+
+    fn parse_let(&mut self) -> Result<Expr> {
         self.advance()?; // skip 'let' kwd
-        let lhs = self.lexer.peek_token().and_then(|peek_tok| -> Result<AstNode> {
+        let ident = self.lexer.peek_token().and_then(|peek_tok| -> Result<Ident> {
             match peek_tok.kind {
-                TokenKind::Delim(DelimKind::Colon) => self.parse_type_annotation(IdentCtx::Decl),
+                TokenKind::Delim(DelimKind::Colon) =>
+                    self.parse_type_annotation(IdentCtx::Def),
                 TokenKind::BinOp(BinOpKind::Eql) =>
-                    Ok(AstNode::Id(
-                        self.expect_id(format!("expected identifier but got '{}'", self.tok.value()))?,
+                    Ok(Ident::new(
+                        &self.expect_id(format!("expected identifier but got '{}'", self.tok.value()))?,
                         TyKind::Infer,
-                        IdentCtx::Decl,
+                        IdentCtx::Def,
                     )),
                 _ =>
                     Err(CortexError::SyntaxError {
@@ -232,27 +244,20 @@ impl<'a> Parser<'_> {
         // TODO: a bit hacky, but works for now. essentially, the left-hand side of the let
         // expression is parsed here instead of self.parse_expr() so the type annotation can be
         // captured properly. then, an expr is just returned anyways.
-        let expr = AstNode::BinExpr {
-            op: BinOpKind::Eql,
-            lhs: Box::new(lhs),
-            rhs: Box::new(self.parse_expr()?),
-        };
+        let expr = Box::new(self.parse_expr()?);
         self.eat(TokenKind::Delim(DelimKind::Scolon))?;
-        return Ok(AstNode::Stmt {
-            kind: KwdKind::Let,
-            expr: Box::new(expr),
-        })
+        Ok(Expr::new(ExprKind::Stmt(StmtKind::Let(ident, expr))))
     }
 
-    fn parse_func(&mut self) -> Result<AstNode> {
+    fn parse_func(&mut self) -> Result<Func> {
         self.advance()?; // skip 'func' kwd
         let func_id = self.expect_id(format!("expected function name but got '{}'", self.tok.value()))?;
         self.eat(TokenKind::BraceOpen(BraceKind::Paren))?;
         let mut params = Vec::new();
         if let TokenKind::Id(_) = self.tok.kind {
             loop {
-                let param_id = self.parse_type_annotation(IdentCtx::Param)?;
-                params.push(Box::new(param_id));
+                let param_ident = self.parse_type_annotation(IdentCtx::Param)?;
+                params.push(param_ident);
                 match &self.tok.kind {
                     TokenKind::Delim(DelimKind::Comma) => (),
                     _ => break,
@@ -278,26 +283,34 @@ impl<'a> Parser<'_> {
                 }.into())
         };
         let body = self.parse_compound()?;
-        let node = AstNode::Func {
-            id: func_id,
-            ret_ty,
+        let node = Func::new(
+            Ident::new(&func_id, ret_ty, IdentCtx::FuncDef),
             params,
-            body: Box::new(body)
-        };
+            Box::new(body),
+        );
         Ok(node)
     }
 
-    fn parse_term(&mut self) -> Result<AstNode> {
+    fn parse_term(&mut self) -> Result<Expr> {
         let node = match self.tok.kind.clone() {
-            TokenKind::Num(n) => AstNode::Num(n),
+            TokenKind::Num(n) => Expr::new(ExprKind::Lit(LitKind::Num(n))),
             TokenKind::UnaryOp(op_kind) => {
                 self.advance()?;
-                return Ok(AstNode::UnaryExpr {
-                    op: op_kind.clone(),
-                    rhs: Box::new(self.parse_term()?),
-                });
+                return Ok(Expr::new(
+                        ExprKind::Unary(
+                            op_kind.clone(),
+                            Box::new(self.parse_term()?)
+                        )
+                ));
             },
-            TokenKind::Id(ref id) => AstNode::Id(id.clone(), TyKind::Lookup, IdentCtx::Ref),
+            TokenKind::Id(ref id) => 
+                Expr::new(ExprKind::Id(
+                    Ident::new(
+                        id,
+                        TyKind::Lookup,
+                        IdentCtx::Ref,
+                    )
+                )),
             TokenKind::BraceOpen(ref brace_kind) if *brace_kind == BraceKind::Paren => {
                 // pass opening parenthesis
                 self.advance()?;
@@ -318,12 +331,12 @@ impl<'a> Parser<'_> {
         Ok(node)
     }
 
-    fn parse_expr(&mut self) -> Result<AstNode> {
+    fn parse_expr(&mut self) -> Result<Expr> {
         let expr = self.parse_expr_helper(0)?;
         Ok(expr)
     }
 
-    fn parse_expr_helper(&mut self, min_prec: i32) -> Result<AstNode> {
+    fn parse_expr_helper(&mut self, min_prec: i32) -> Result<Expr> {
         let mut lhs = self.parse_term()?;
 
         loop {
@@ -340,11 +353,11 @@ impl<'a> Parser<'_> {
                     };
                     self.advance()?;
                     let rhs = self.parse_expr_helper(next_min_prec)?;
-                    lhs = AstNode::BinExpr {
-                        op: op_kind,
-                        lhs: Box::new(lhs),
-                        rhs: Box::new(rhs),
-                    }
+                    lhs = Expr::new(ExprKind::Binary(
+                        op_kind,
+                        Box::new(lhs),
+                        Box::new(rhs),
+                    ));
                 },
                 None => break,
             }

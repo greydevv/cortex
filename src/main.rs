@@ -23,7 +23,7 @@ fn main() {
         Err(_) => "FAILURE".red(),
     };
     eprintln!(
-        "\n[{}, took {:.2}s]",
+        "[{}, took {:.2}s]",
         status_string,
         now.elapsed().as_secs_f32()
     );

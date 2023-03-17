@@ -24,6 +24,7 @@ pub enum CortexError {
         help: Option<String>,
     },
     FileIOError(String),
+    TypeError(String),
 }
 
 impl From<ClapError> for CortexError {
@@ -143,6 +144,7 @@ impl fmt::Display for CortexError {
             CortexError::ArgError(msg) => msg,
             CortexError::SyntaxError { msg, .. } => msg,
             CortexError::FileIOError(msg) => msg,
+            CortexError::TypeError(msg) => msg,
         };
 
         write!(f, "{}: {}\n", "error".red().bold(), err_msg)?;
