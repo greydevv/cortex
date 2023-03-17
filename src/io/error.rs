@@ -7,7 +7,7 @@ use clap::error::ContextKind;
 use clap::error::Error as ClapError;
 
 use crate::io::file::{ FileHandler, FileSpan };
-use crate::lexer::token::{ Token, Len };
+use crate::symbols::{ Token, Len };
 use crate::sess::SessCtx;
 
 /// Result alias used throughout compilation stages.

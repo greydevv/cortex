@@ -2,21 +2,19 @@ use std::iter::Peekable;
 
 use crate::io::file::{ FilePos, FileSpan };
 use crate::io::error::{ CortexError, Result };
-use crate::lexer::token::{
+use crate::sess::SessCtx;
+use crate::symbols::{
     Token,
     TokenKind,
+    TyKind,
     DelimKind,
     BraceKind,
     BinOpKind,
     UnaryOpKind,
-    TyKind,
     KwdKind,
     Len,
     MaybeFrom,
 };
-use crate::sess::SessCtx;
-
-pub mod token;
 
 pub struct Lexer<'a> {
     c: char,

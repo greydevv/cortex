@@ -4,6 +4,7 @@ use colored::Colorize;
 
 use crate::sess::Session;
 
+pub mod symbols;
 pub mod sess;
 pub mod args;
 pub mod io;

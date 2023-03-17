@@ -2,7 +2,7 @@ use std::fs::File;
 use std::io::{ Read, ErrorKind };
 use std::fmt;
 
-use crate::lexer::token::Len;
+use crate::symbols::Len;
 use crate::io::error::{ CortexError, Result };
 
 #[derive(Debug)]

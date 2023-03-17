@@ -11,7 +11,7 @@ use crate::ast::{
     IdentCtx,
     CondKind,
 };
-use crate::lexer::token::{
+use crate::symbols::{
     Token,
     TokenKind,
     BinOpKind,

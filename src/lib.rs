@@ -1,3 +1,4 @@
+pub mod symbols;
 pub mod io;
 pub mod lexer;
 pub mod parser;

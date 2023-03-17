@@ -1,4 +1,4 @@
-use crate::lexer::token::{ TyKind, BinOpKind, UnaryOpKind };
+use crate::symbols::{ TyKind, BinOpKind, UnaryOpKind };
 
 pub mod validate;
 

@@ -1,7 +1,7 @@
 use std::collections::HashMap;
 use std::convert::From;
 
-use crate::lexer::token::{ TyKind, BinOpKind };
+use crate::symbols::{ TyKind, BinOpKind };
 use crate::io::error::Result;
 use crate::ast::{
     AstNodeNew,
