@@ -39,14 +39,15 @@ impl Session {
             return Session::only_lexer_tokens(&ctx);
         }
         let mut parser = Parser::new(&ctx)?;
-        parser.parse().and_then(|ref mut tree| {
-            for node in &mut *tree {
-                println!("{}", node.debug_string());
-            }
-            let mut vd = Validator::new();
-            vd.validate(tree)?;
-            Ok(())
-        })?;
+        parser.parse()
+            .and_then(|ref mut tree| {
+                let mut vd = Validator::new();
+                vd.validate(tree)?;
+                for node in &mut *tree {
+                    println!("{}", node.debug_string());
+                }
+                Ok(())
+            })?;
         Ok(())
     }
 

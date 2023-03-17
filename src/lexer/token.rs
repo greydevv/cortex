@@ -1,3 +1,4 @@
+use std::convert::From;
 use std::fmt;
 
 use crate::io::file::{ FilePos, FileSpan };
@@ -334,12 +335,18 @@ pub enum OpAssoc {
     Right
 }
 
-#[derive(PartialEq, Clone, Debug)]
+#[derive(PartialEq, Clone, Copy, Debug)]
 pub enum TyKind {
     Int(usize),
     Void,
     Infer,
     Lookup,
+}
+
+impl TyKind {
+    pub fn compat(&self, other: &TyKind) -> bool {
+        *self == *other
+    }
 }
 
 impl fmt::Display for TyKind {
@@ -362,8 +369,8 @@ impl Literal for TyKind {
         match &self {
             TyKind::Int(size) => format!("i{}", size),
             TyKind::Void => String::from("void"),
-            TyKind::Infer => String::from("INFER"),
-            TyKind::Lookup => String::from("LOOKUP"),
+            TyKind::Infer => String::from("Infer"),
+            TyKind::Lookup => String::from("Lookup"),
         }
     }
 }
