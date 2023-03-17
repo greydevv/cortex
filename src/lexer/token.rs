@@ -2,6 +2,7 @@ use std::convert::From;
 use std::fmt;
 
 use crate::io::file::{ FilePos, FileSpan };
+use crate::io::error::{ Result, CortexError };
 
 pub enum TokenPresence {
     Optional(Count),
@@ -338,14 +339,22 @@ pub enum OpAssoc {
 #[derive(PartialEq, Clone, Copy, Debug)]
 pub enum TyKind {
     Int(usize),
+    Bool,
+    Str,
     Void,
     Infer,
     Lookup,
 }
 
 impl TyKind {
-    pub fn compat(&self, other: &TyKind) -> bool {
-        *self == *other
+    pub fn compat(&self, other: &TyKind) -> Result {
+        if *self == *other {
+            Ok(())
+        } else {
+            Err(CortexError::TypeError(
+                format!("expected type '{}' but got type '{}'", *self, *other)
+            ).into())
+        }
     }
 }
 
@@ -368,6 +377,8 @@ impl Literal for TyKind {
     fn literal(&self) -> String {
         match &self {
             TyKind::Int(size) => format!("i{}", size),
+            TyKind::Bool => format!("bool"),
+            TyKind::Str => format!("str"),
             TyKind::Void => String::from("void"),
             TyKind::Infer => String::from("Infer"),
             TyKind::Lookup => String::from("Lookup"),
