@@ -2,7 +2,7 @@ use std::collections::HashMap;
 use std::convert::From;
 
 use crate::lexer::token::{ TyKind, BinOpKind };
-use crate::io::error::{ CortexError, Result };
+use crate::io::error::Result;
 use crate::ast::{
     AstNodeNew,
     Func,
@@ -10,6 +10,7 @@ use crate::ast::{
     ExprKind,
     StmtKind,
     LitKind,
+    CondKind,
     Ident,
     IdentCtx,
 };
@@ -85,43 +86,73 @@ impl Validator {
     }
 
     pub fn validate(&mut self, tree: &mut Vec<Box<AstNodeNew>>) -> Result {
-        tree.iter_mut().try_for_each(|node| self.validate_node(node))
+        tree.iter_mut()
+            .try_for_each(|node| {
+                self.validate_node(node)?;
+                Ok(())
+            })
     }
 
-    fn validate_node(&mut self, node: &mut Box<AstNodeNew>) -> Result {
+    fn validate_node(&mut self, node: &mut Box<AstNodeNew>) -> Result<TyKind> {
         match **node {
             AstNodeNew::Func(ref mut func) => self.validate_func(func),
             AstNodeNew::Expr(ref mut expr) => self.validate_expr(expr),
         }
     }
 
-    fn validate_func(&mut self, func: &mut Func) -> Result {
-        self.validate_ident(&mut func.ident)?;
+    fn validate_func(&mut self, func: &mut Func) -> Result<TyKind> {
+        let ret_ty_kind = self.validate_ident(&mut func.ident)?;
         func.params.iter_mut()
-            .try_for_each(|p| {
-                self.validate_ident(p)
+            .try_for_each(|p| -> Result {
+                self.validate_ident(p)?;
+                Ok(())
             })?;
         self.validate_expr(&mut func.body)?;
-        Ok(())
+        Ok(ret_ty_kind)
     }
 
-    fn validate_expr(&mut self, expr: &mut Expr) -> Result {
+    fn validate_expr(&mut self, expr: &mut Expr) -> Result<TyKind> {
         match expr.kind {
             ExprKind::Id(ref mut ident) => self.validate_ident(ident),
             ExprKind::Lit(ref lit_kind) => self.validate_lit(lit_kind),
-            ExprKind::Compound(ref mut children) =>
+            ExprKind::Compound(ref mut children) => {
                 children.iter_mut()
-                    .try_for_each(|c| self.validate_node(c)),
-            ExprKind::Binary(ref _op_kind, ref mut lhs, ref mut rhs) =>
-                self.validate_expr(lhs)
-                    .and_then(|_| self.validate_expr(rhs)),
-            ExprKind::Unary(..) => Ok(()),
+                    .try_for_each(|c| -> Result {
+                        self.validate_node(c)?;
+                        Ok(())
+                    })?;
+                Ok(TyKind::Void)
+            },
+            ExprKind::Binary(ref op_kind, ref mut lhs, ref mut rhs) => {
+                let lhs_ty = self.validate_expr(lhs)?;
+                let rhs_ty = self.validate_expr(rhs)?;
+                // TODO: Need to do anything with operator associativity?
+                self.validate_bin_op(op_kind, &lhs_ty, &rhs_ty)
+            }
             ExprKind::Stmt(ref mut stmt_kind) => self.validate_stmt(stmt_kind),
-            _ => unimplemented!(),
+            ExprKind::Cond(ref mut cond_kind) => self.validate_cond(cond_kind),
+            _ => unimplemented!("{}", expr.kind),
         }
     }
 
-    fn validate_stmt(&mut self, stmt_kind: &mut StmtKind) -> Result {
+    fn validate_cond(&mut self, cond_kind: &mut CondKind) -> Result<TyKind> {
+        match cond_kind {
+            CondKind::If(ref mut expr, ref mut body, ref mut other) => {
+                let if_ty_kind = self.expect_bool_from(expr)
+                    .and_then(|_| self.validate_expr(body))?;
+                match other {
+                    Some(other) => self.validate_expr(other),
+                    None => Ok(if_ty_kind),
+                }
+            },
+            CondKind::Else(ref mut body) => self.validate_expr(body),
+            CondKind::While(ref mut expr, ref mut body) =>
+                self.expect_bool_from(expr)
+                    .and_then(|_| self.validate_expr(body))
+        }
+    }
+
+    fn validate_stmt(&mut self, stmt_kind: &mut StmtKind) -> Result<TyKind> {
         match stmt_kind {
             // TODO: Need to evaluate rhs of let first otherwise `let y = y` compiles fine (BAD)
             StmtKind::Let(ref mut ident, ref mut expr) =>
@@ -133,7 +164,7 @@ impl Validator {
         }
     }
 
-    fn validate_ident(&mut self, ident: &mut Ident) -> Result {
+    fn validate_ident(&mut self, ident: &mut Ident) -> Result<TyKind> {
         match ident.ctx() {
             IdentCtx::Def
                 | IdentCtx::Param
@@ -141,7 +172,7 @@ impl Validator {
                     // format error based on context (param, func, variable)
                     match self.glob.try_insert(ident) {
                         Some(_) => todo!("PROPER ERROR: defined symbol '{}' already exists!", ident.raw()),
-                        None => Ok(())
+                        None => Ok(*ident.ty_kind())
                     }
             IdentCtx::Ref =>
                 self.glob.query(ident)
@@ -149,20 +180,40 @@ impl Validator {
                     .ok_or_else(|| todo!("PROPER ERROR: referenced symbol '{}' doesn't exist!", ident.raw()))
                     .and_then(|info| {
                         ident.update_ty(info.ty_kind);
-                        Ok(())
+                        Ok(info.ty_kind)
                     })
                         
         }
     } 
 
-    fn validate_lit(&self, lit: &LitKind) -> Result {
-        match lit {
-            LitKind::Num(_n) => Ok(()),
-            LitKind::Str(_str) => Ok(()),
-        }
+    fn validate_lit(&self, lit: &LitKind) -> Result<TyKind> {
+        let ty_kind = match lit {
+            // TODO: Use 'n' in 'Num(n)' to determine size of type
+            LitKind::Num(_) => TyKind::Int(32),
+            LitKind::Str(_) => TyKind::Str,
+        };
+        Ok(ty_kind)
     }
 
-    // fn validate_bin_op(&self, bin_op_kind: BinOpKind, lhs_ty: &TyKind, rhs_ty: &TyKind) {
-    //     todo!()
-    // }
+    fn expect_bool_from(&mut self, expr: &mut Expr) -> Result {
+        self.validate_expr(expr)
+            .and_then(|ref ty_kind| TyKind::Bool.compat(ty_kind))
+    }
+
+    fn validate_bin_op(&self, bin_op_kind: &BinOpKind, lhs_ty: &TyKind, rhs_ty: &TyKind) -> Result<TyKind> {
+        lhs_ty.compat(rhs_ty)?;
+        let op_ty = match bin_op_kind {
+            BinOpKind::Eql => TyKind::Void,
+            BinOpKind::Gr
+                | BinOpKind::GrEql
+                | BinOpKind::Lt
+                | BinOpKind::LtEql
+                | BinOpKind::EqlBool => TyKind::Bool,
+            BinOpKind::Add
+                | BinOpKind::Sub
+                | BinOpKind::Mul
+                | BinOpKind::Div => TyKind::Int(32),
+        };
+        Ok(op_ty)
+    }
 }
