@@ -1,61 +1,73 @@
+//! The AST objects and validator.
+
 use crate::symbols::{ TyKind, BinOpKind, UnaryOpKind };
 
 pub mod validate;
 
+/// The context of an identifier.
 #[derive(PartialEq, Clone, Copy, strum_macros::Display)]
 pub enum IdentCtx {
-    /// Variable definition
+    /// Variable definition.
     Def,
-    /// Variable reference
+    /// Variable reference.
     Ref,
-    /// Function parameter
+    /// Function parameter.
     Param,
-    /// Function definition
+    /// Function definition.
     FuncDef,
 }
 
+/// The identifier object.
 #[derive(Clone)]
 pub struct Ident(String, TyKind, IdentCtx);
 
 impl Ident {
+    /// Creates an identifier.
     pub fn new(ident: &String, ty_kind: TyKind, ctx: IdentCtx) -> Ident {
         Ident(ident.clone(), ty_kind, ctx)
     }
 
+    /// Gets the raw identifier.
     pub fn raw(&self) -> &String {
         &self.0
     }
 
+    /// Gets the identifier's type.
     pub fn ty_kind(&self) -> &TyKind {
         &self.1
     }
 
-    pub fn ctx(&self) -> &IdentCtx {
-        &self.2
-    }
-
+    /// Sets the identifier's type.
     pub fn update_ty(&mut self, ty_kind: TyKind) {
         self.1 = ty_kind;
     }
+
+    /// Gets the identifier's context.
+    pub fn ctx(&self) -> &IdentCtx {
+        &self.2
+    }
 }
 
+/// The AST node object.
 #[derive(Clone, strum_macros::Display)]
 pub enum AstNode {
     Func(Func),
     Expr(Expr),
 }
 
+/// The AST function variant.
 #[derive(Clone)]
 pub struct Func {
     /// Function identifier (name) with type as return type.
     ident: Ident,
     /// Function parameters.
     params: Vec<Ident>,
-    /// Function body
+    /// Function body.
     body: Box<Expr>,
 }
 
 impl Func {
+    /// Creates a function node.
     pub fn new(ident: Ident, params: Vec<Ident>, body: Box<Expr>) -> Func {
         Func {
             ident,
@@ -65,13 +77,14 @@ impl Func {
     }
 }
 
-/// A generic expression (literal, statement, etc.).
+/// The AST expression variant.
 #[derive(Clone)]
 pub struct Expr {
     kind: ExprKind,
 }
 
 impl Expr {
+    /// Creates an expression node.
     pub fn new(kind: ExprKind) -> Expr {
         Expr { kind }
     }
@@ -80,21 +93,23 @@ impl Expr {
 /// The various kinds of expression components.
 #[derive(Clone, strum_macros::Display)]
 pub enum ExprKind {
-    /// Binary expressions
+    /// Binary expressions.
     Binary(BinOpKind, Box<Expr>, Box<Expr>),
-    /// Unary expressions
+    /// Unary expressions.
     Unary(UnaryOpKind, Box<Expr>),
-    /// Statements associated with expressions
+    /// Statements associated with expressions.
     Stmt(StmtKind),
-    /// Variable names
+    /// Variable names.
     Id(Ident),
-    /// Numeric literals
+    /// Numeric literals.
     Lit(LitKind),
-    /// Block
-    Compound(Vec<Box<AstNode>>),
+    /// Collection of expressions (block).
+    Compound(Vec<Box<AstNodeNew>>),
+    /// Conditionals (if, while, etc.).
     Cond(CondKind),
 }
 
+/// The various kinds of conditional expressions.
 #[derive(Clone, strum_macros::Display)]
 pub enum CondKind {
     If(Box<Expr>, Box<Expr>, Option<Box<Expr>>),
@@ -102,27 +117,30 @@ pub enum CondKind {
     While(Box<Expr>, Box<Expr>),
 }
 
+/// The various kinds of literals.
 #[derive(Clone, strum_macros::Display)]
 pub enum LitKind {
-    /// Numeric literals, e.g. `4` and `0.14`
+    /// Numeric literals, e.g., `4` and `0.14`.
     Num(i32), // just i32 for now
-    /// String literals, e.g. `"Hello Cortex!"`
+    /// String literals, e.g., `"Hello, Cortex!"`.
     Str(String),
 }
 
+/// The various kinds of statements.
 #[derive(Clone, strum_macros::Display)]
 pub enum StmtKind {
-    /// Let statements, e.g. `let x = 13;`
+    /// Let statements, e.g. `let x = 13;`.
     Let(Ident, Box<Expr>),
-    /// Return statements, e.g. `ret x + y;`
+    /// Return statements, e.g. `ret x + y;`.
     Ret(Option<Box<Expr>>),
-    /// Include statements
+    /// Include statements.
     Incl(String),
-    /// While loop ()
+    /// While loop.
     While(Box<Expr>, Box<Expr>)
 }
 
-impl AstNode {
+impl AstNodeNew {
+    /// A helper for the [`AstDebug`] trait to print without supplying the number of indents.
     pub fn debug_string(&self) -> String {
         self.debug(0)
     }
@@ -150,6 +168,7 @@ impl AstNode {
     // }
 }
 
+/// A trait providing a way to print the AST.
 trait AstDebug {
     fn debug(&self, indents: usize) -> String;
 }
