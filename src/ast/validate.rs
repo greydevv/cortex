@@ -15,14 +15,19 @@ use crate::ast::{
     IdentCtx,
 };
 
+/// Describes an identifier in the symbol table.
 struct IdentInfo {
+    /// The type of the identifier.
     ty_kind: TyKind,
     #[allow(dead_code)]
+    /// The context of the identifier.
     ident_ctx: IdentCtx,
+    /// How many times this identifier has been referenced.
     ref_count: u32,
 }
 
 impl IdentInfo {
+    /// Creates a new identifier information object.
     pub fn new(ty_kind: TyKind, ident_ctx: IdentCtx) -> IdentInfo {
         IdentInfo {
             ty_kind,
@@ -31,6 +36,7 @@ impl IdentInfo {
         }
     }
 
+    /// Updates the number of times this particular identifier has been referenced.
     pub fn update_ref_count(&mut self) {
         self.ref_count += 1;
     }
@@ -45,17 +51,23 @@ impl From<&Ident> for IdentInfo {
     }
 }
 
+/// The symbol table object.
 struct SymbolTable {
+    /// The wrapped symbol table.
     inner: HashMap<String, IdentInfo>
 }
 
 impl SymbolTable {
+    /// Creates a new (empty) symbol table.
     pub fn new() -> SymbolTable {
         SymbolTable {
             inner: HashMap::new()
         }
     }
 
+    /// Queries the symbol table with the given identifier.
+    ///
+    /// If the identifier is found, its reference count is then updated.
     pub fn query(&mut self, ident: &Ident) -> Option<&IdentInfo> {
         self.inner.get_mut(ident.raw())
             .and_then(|info| {
@@ -64,7 +76,13 @@ impl SymbolTable {
             })
     }
 
+    /// Attempts to insert an identifier into the symbol table.
+    ///
+    /// If insertion is successful, `None` is returned. Otherwise, the identifier that couldn't be
+    /// inserted is returned.
     pub fn try_insert<'a>(&'a mut self, ident: &'a Ident) -> Option<&Ident> {
+        // TODO: Return the occupying IdentInfo instead. This could be useful for underlining (in
+        // the error) the definition of the already defined identifier.
         if let Some(_) = self.query(ident) {
             Some(ident)
         } else {
@@ -74,17 +92,22 @@ impl SymbolTable {
     }
 }
 
+/// The validator object.
 pub struct Validator {
+    /// Global symbol table.
     glob: SymbolTable,
 }
 
 impl Validator {
+    /// Creates a new validator object.
     pub fn new() -> Validator {
         Validator {
             glob: SymbolTable::new(),
         }
     }
 
+    /// The main driver for the validator. This method runs over the AST and validates it, mainly
+    /// by type checking.
     pub fn validate(&mut self, tree: &mut Vec<Box<AstNodeNew>>) -> Result {
         tree.iter_mut()
             .try_for_each(|node| {
@@ -93,6 +116,7 @@ impl Validator {
             })
     }
 
+    /// Validates a generic AST node.
     fn validate_node(&mut self, node: &mut Box<AstNodeNew>) -> Result<TyKind> {
         match **node {
             AstNodeNew::Func(ref mut func) => self.validate_func(func),
@@ -100,6 +124,7 @@ impl Validator {
         }
     }
 
+    /// Validates a function node.
     fn validate_func(&mut self, func: &mut Func) -> Result<TyKind> {
         let ret_ty_kind = self.validate_ident(&mut func.ident)?;
         func.params.iter_mut()
@@ -111,6 +136,7 @@ impl Validator {
         Ok(ret_ty_kind)
     }
 
+    /// Validates a generic expression node.
     fn validate_expr(&mut self, expr: &mut Expr) -> Result<TyKind> {
         match expr.kind {
             ExprKind::Id(ref mut ident) => self.validate_ident(ident),
@@ -135,6 +161,7 @@ impl Validator {
         }
     }
 
+    /// Validates a conditional expression.
     fn validate_cond(&mut self, cond_kind: &mut CondKind) -> Result<TyKind> {
         match cond_kind {
             CondKind::If(ref mut expr, ref mut body, ref mut other) => {
@@ -152,6 +179,7 @@ impl Validator {
         }
     }
 
+    /// Validates a statement.
     fn validate_stmt(&mut self, stmt_kind: &mut StmtKind) -> Result<TyKind> {
         match stmt_kind {
             // TODO: Need to evaluate rhs of let first otherwise `let y = y` compiles fine (BAD)
@@ -164,6 +192,11 @@ impl Validator {
         }
     }
 
+    /// Determined.
+    ///
+    /// If the identifier is `x` and the context is [`IdentCtx::Ref`], the validator needs to make
+    /// sure `x` is an already defined symbol. If instead the context of `x` is [`IdentCtx::Def`],
+    /// for example, the symbol table needs updated with `x`.
     fn validate_ident(&mut self, ident: &mut Ident) -> Result<TyKind> {
         match ident.ctx() {
             IdentCtx::Def
@@ -186,7 +219,10 @@ impl Validator {
         }
     } 
 
+    /// Determines the type of a literal.
     fn validate_lit(&self, lit: &LitKind) -> Result<TyKind> {
+        // TODO: Does this need to return a Result? It won't fail, so it should probably just
+        // return a TyKind, not Result<TyKind>.
         let ty_kind = match lit {
             // TODO: Use 'n' in 'Num(n)' to determine size of type
             LitKind::Num(_) => TyKind::Int(32),
@@ -195,11 +231,13 @@ impl Validator {
         Ok(ty_kind)
     }
 
+    /// Expects a given expression to produce the boolean type.
     fn expect_bool_from(&mut self, expr: &mut Expr) -> Result {
         self.validate_expr(expr)
             .and_then(|ref ty_kind| TyKind::Bool.compat(ty_kind))
     }
 
+    /// Helper method for validating a binary operator.
     fn validate_bin_op(&self, bin_op_kind: &BinOpKind, lhs_ty: &TyKind, rhs_ty: &TyKind) -> Result<TyKind> {
         lhs_ty.compat(rhs_ty)?;
         let op_ty = match bin_op_kind {
