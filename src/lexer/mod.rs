@@ -177,8 +177,6 @@ impl<'a> Lexer<'_> {
             '-' => 
                 match self.peek_char() {
                     '>' => TokenKind::Arrow,
-                    // could be a unary operator (e.g., '!' in '!x')
-                    c if !c.is_whitespace() => TokenKind::UnaryOp(UnaryOpKind::Neg),
                     _ => TokenKind::BinOp(BinOpKind::Sub),
                 },
             '=' =>
@@ -488,7 +486,8 @@ mod tests {
         let mut lexer = Lexer::new(&ctx);
 
         let expected_toks = vec![
-            Token::new(TokenKind::UnaryOp(UnaryOpKind::Neg), FileSpan::one(FilePos::new(1, 1))),
+            // treat unary operator as a binary operator at first
+            Token::new(TokenKind::BinOp(BinOpKind::Sub), FileSpan::one(FilePos::new(1, 1))),
             Token::new(TokenKind::Num(13), FileSpan::new(FilePos::new(1, 2), FilePos::new(1, 4))),
         ];
 

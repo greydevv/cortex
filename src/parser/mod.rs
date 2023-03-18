@@ -15,6 +15,7 @@ use crate::symbols::{
     Token,
     TokenKind,
     BinOpKind,
+    UnaryOpKind,
     OpAssoc,
     TyKind,
     KwdKind,
@@ -294,14 +295,20 @@ impl<'a> Parser<'_> {
     fn parse_term(&mut self) -> Result<Expr> {
         let node = match self.tok.kind.clone() {
             TokenKind::Num(n) => Expr::new(ExprKind::Lit(LitKind::Num(n))),
+            TokenKind::BinOp(BinOpKind::Sub) => {
+                // treat this as a unary operation
+                self.advance()?; // skip operator
+                return Ok(Expr::new(ExprKind::Unary(
+                    UnaryOpKind::Neg,
+                    Box::new(self.parse_term()?)
+                )))
+            }
             TokenKind::UnaryOp(op_kind) => {
-                self.advance()?;
-                return Ok(Expr::new(
-                        ExprKind::Unary(
-                            op_kind.clone(),
-                            Box::new(self.parse_term()?)
-                        )
-                ));
+                self.advance()?; // skip operator
+                return Ok(Expr::new(ExprKind::Unary(
+                    op_kind.clone(),
+                    Box::new(self.parse_term()?)
+                )));
             },
             TokenKind::Id(ref id) => 
                 Expr::new(ExprKind::Id(
