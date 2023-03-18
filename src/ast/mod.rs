@@ -1,3 +1,5 @@
+//! The AST objects and validator.
+
 use crate::symbols::{ TyKind, BinOpKind, UnaryOpKind };
 
 pub mod validate;
