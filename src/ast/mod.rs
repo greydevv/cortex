@@ -104,7 +104,7 @@ pub enum ExprKind {
     /// Numeric literals.
     Lit(LitKind),
     /// Collection of expressions (block).
-    Compound(Vec<Box<AstNodeNew>>),
+    Compound(Vec<Box<AstNode>>),
     /// Conditionals (if, while, etc.).
     Cond(CondKind),
 }
@@ -139,7 +139,7 @@ pub enum StmtKind {
     While(Box<Expr>, Box<Expr>)
 }
 
-impl AstNodeNew {
+impl AstNode {
     /// A helper for the [`AstDebug`] trait to print without supplying the number of indents.
     pub fn debug_string(&self) -> String {
         self.debug(0)

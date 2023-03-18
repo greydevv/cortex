@@ -110,7 +110,7 @@ impl Validator {
 
     /// The main driver for the validator. This method runs over the AST and validates it, mainly
     /// by type checking.
-    pub fn validate(&mut self, tree: &mut Vec<Box<AstNodeNew>>) -> Result {
+    pub fn validate(&mut self, tree: &mut Vec<Box<AstNode>>) -> Result {
         tree.iter_mut()
             .try_for_each(|node| {
                 self.validate_node(node)?;
@@ -119,7 +119,7 @@ impl Validator {
     }
 
     /// Validates a generic AST node.
-    fn validate_node(&mut self, node: &mut Box<AstNodeNew>) -> Result<TyKind> {
+    fn validate_node(&mut self, node: &mut Box<AstNode>) -> Result<TyKind> {
         match **node {
             AstNode::Func(ref mut func) => self.validate_func(func),
             AstNode::Expr(ref mut expr) => self.validate_expr(expr),

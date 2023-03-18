@@ -53,7 +53,7 @@ impl<'a> Parser<'_> {
     }
 
     /// The main driver of the parser. This method parses the given file and returns its Abstract Syntax Tree (AST).
-    pub fn parse(&mut self) -> Result<Vec<Box<AstNodeNew>>> {
+    pub fn parse(&mut self) -> Result<Vec<Box<AstNode>>> {
         let mut tree = Vec::new();
         while !self.tok.is_eof() {
             if let TokenKind::Kwd(kwd_kind) = &self.tok.kind {
@@ -129,7 +129,7 @@ impl<'a> Parser<'_> {
     ///
     /// If the parser encounters the `if` keyword, it will continue by attempting to parse an
     /// if/else if/else statement.
-    fn parse_kwd(&mut self, kwd_kind: &KwdKind) -> Result<AstNodeNew> {
+    fn parse_kwd(&mut self, kwd_kind: &KwdKind) -> Result<AstNode> {
         let node = match *kwd_kind {
             // early return for function
             KwdKind::Func => return Ok(AstNode::Func(self.parse_func()?)),
