@@ -142,7 +142,7 @@ impl Validator {
     fn validate_expr(&mut self, expr: &mut Expr) -> Result<TyKind> {
         match expr.kind {
             ExprKind::Id(ref mut ident) => self.validate_ident(ident),
-            ExprKind::Lit(ref lit_kind) => self.validate_lit(lit_kind),
+            ExprKind::Lit(ref lit_kind) => Ok(self.validate_lit(lit_kind)),
             ExprKind::Compound(ref mut children) => {
                 children.iter_mut()
                     .try_for_each(|c| -> Result {
@@ -184,7 +184,6 @@ impl Validator {
     /// Validates a statement.
     fn validate_stmt(&mut self, stmt_kind: &mut StmtKind) -> Result<TyKind> {
         match stmt_kind {
-            // TODO: Need to evaluate rhs of let first otherwise `let y = y` compiles fine (BAD)
             StmtKind::Let(ref mut ident, ref mut expr) =>
                 // validate the variable being defined isn't used in its own definition by
                 // validating the right-hand side of the equals sign first
@@ -222,15 +221,12 @@ impl Validator {
     } 
 
     /// Determines the type of a literal.
-    fn validate_lit(&self, lit: &LitKind) -> Result<TyKind> {
-        // TODO: Does this need to return a Result? It won't fail, so it should probably just
-        // return a TyKind, not Result<TyKind>.
-        let ty_kind = match lit {
+    fn validate_lit(&self, lit: &LitKind) -> TyKind {
+        match lit {
             // TODO: Use 'n' in 'Num(n)' to determine size of type
             LitKind::Num(_) => TyKind::Int(32),
             LitKind::Str(_) => TyKind::Str,
-        };
-        Ok(ty_kind)
+        }
     }
 
     /// Expects a given expression to produce the boolean type.
