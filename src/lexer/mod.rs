@@ -60,10 +60,9 @@ impl<'a> Lexer<'_> {
     }
 
     fn peek_char(&mut self) -> char {
-        match self.chars.peek() {
-            Some(c) => *c,
-            None => '\0',
-        }
+        self.chars.peek()
+            .and_then(|c| Some(*c))
+            .unwrap_or_else(|| '\0')
     }
 
     pub fn next_token(&mut self) -> Result<Token> {
@@ -285,7 +284,7 @@ impl<'a> Lexer<'_> {
 
     fn skip_junk(&mut self) {
         self.skip_whitespace();
-        if self.c == '/' && *self.chars.peek().unwrap() == '/'
+        if self.c == '/' && self.peek_char() == '/'
         {
             self.skip_comment();
             self.skip_junk();
