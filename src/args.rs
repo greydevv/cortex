@@ -5,6 +5,7 @@ use clap::parser::ArgMatches;
 
 use crate::io::error::{ Result, CortexError };
 
+/// Parses command line arguments using the [`clap`](https://docs.rs/clap/latest/clap/) crate.
 pub fn parse_args() -> Result<ArgMatches> {
     command!()
         .author("Greyson Murray, greyson.murray@gmail.com")
