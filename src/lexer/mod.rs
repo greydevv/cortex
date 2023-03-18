@@ -1,3 +1,5 @@
+//! The main lexing interface.
+
 use std::iter::Peekable;
 
 use crate::io::file::{ FilePos, FileSpan };
@@ -16,15 +18,22 @@ use crate::symbols::{
     MaybeFrom,
 };
 
+/// The lexer object.
 pub struct Lexer<'a> {
+    /// The current character.
     c: char,
+    /// The context of the current compilation session.
     ctx: &'a SessCtx,
+    /// The current position in the file.
     pos: FilePos,
+    /// The stack keeping track of open/close braces.
     brace_stack: Vec<Token>,
+    /// The source code as a peekable iterator.
     chars: Peekable<std::str::Chars<'a>>,
 }
 
 impl<'a> Lexer<'_> {
+    /// Creates a new lexer from a given context.
     pub fn new(ctx: &'a SessCtx) -> Lexer<'a> {
         let mut chars = ctx.fh.contents().chars().peekable();
         let c = match chars.next() {
@@ -40,6 +49,7 @@ impl<'a> Lexer<'_> {
         }
     }
 
+    /// Advances the lexer through the source code.
     fn next_char(&mut self) {
         if self.c == '\0' {
             return;
@@ -59,12 +69,15 @@ impl<'a> Lexer<'_> {
 
     }
 
+    /// Peeks the next character from the source code and returns EOF if there are no characters
+    /// left.
     fn peek_char(&mut self) -> char {
         self.chars.peek()
             .and_then(|c| Some(*c))
             .unwrap_or_else(|| '\0')
     }
 
+    /// Generates a token from source code.
     pub fn next_token(&mut self) -> Result<Token> {
         self.skip_junk();
         if self.eof() {
@@ -85,6 +98,7 @@ impl<'a> Lexer<'_> {
         }
     }
 
+    /// Peeks the next token from the source code.
     pub fn peek_token(&mut self) -> Result<Token> {
         // TODO: possibly save peeked Token in an internal, private member such that a call to
         // next_token() after a peek_token() only must retrieve token from member
@@ -101,6 +115,19 @@ impl<'a> Lexer<'_> {
         res
     }
 
+    /// Generates a token from a lexeme beginning with an alphabetic character.
+    ///
+    /// # Examples
+    /// These tokens are typically things like variables, keywords, types, etc.
+    /// ```
+    /// let x: i32 = multiply(2, 4);
+    /// ```
+    ///
+    /// This method would handle the following lexemes:
+    /// - `let` into a keyword
+    /// - `x` into a variable identifier
+    /// - `i32` into a type
+    /// - `multiply` into a function identifier
     fn lex_alpha(&mut self) -> Token {
         let mut val = String::new();
         let beg_pos = self.pos;
@@ -120,9 +147,9 @@ impl<'a> Lexer<'_> {
         }
     }
 
-    /// Returns a [`Token`] containing data representing a numeric literal.
+    /// Generates a token representing a numeric literal.
     ///
-    /// It is worth noting that the Parser is responsible for understanding the following two
+    /// It is worth noting that the parser is responsible for understanding the following two
     /// expressions are semantically valid and equivalent:
     ///
     /// ```
@@ -130,23 +157,9 @@ impl<'a> Lexer<'_> {
     /// 5 -3
     /// ```
     ///
-    /// The Lexer yields four tokens (Num, BinOp, UnaryOp, Num) for the first expression and only
-    /// two (Num, BinOp, Num) for the second equation. In the case of the second expression, the
-    /// Parser must expand the negative numeric literal into a subtraction operation followed by a
-    /// positive numeric literal, like so:
-    ///
-    /// ```
-    /// 5 -3 // (5) - (3)
-    /// ```
-    ///
-    /// # Examples
-    ///
-    /// ```
-    /// "13"  // Token(TokenKind::Num, "13", ...)
-    ///
-    /// "-13" // Token(TokenKind::Num, "-13", ...)
-    /// ```
-    ///
+    /// Furthermore, the lexer will not yield tokens representing negative numeric literals.
+    /// The negation operation is a unary operation.
+    /// 
     fn lex_num(&mut self) -> Result<Token> {
         // initializing with current char before the loop allows a negative sign to appear before a
         // numeric literal
@@ -164,8 +177,7 @@ impl<'a> Lexer<'_> {
         }
     }
 
-    /// Returns a [`Token`] from a static element of source code (i.e., delimiters, operators,
-    /// etc.).
+    /// Generates a token from a static lexeme (i.e., delimiters, operators, etc.).
     fn lex_other(&mut self) -> Result<Token> {
         let beg_pos = self.pos;
         let kind = match self.c {
@@ -219,6 +231,7 @@ impl<'a> Lexer<'_> {
         Ok(tok)
     }
 
+    /// Updates the brace balancing state.
     fn update_balancing_state(&mut self, tok: Token) -> Result {
         match &tok.kind {
             TokenKind::BraceOpen(_) => self.brace_stack.push(tok),
@@ -248,6 +261,7 @@ impl<'a> Lexer<'_> {
         Ok(())
     }
 
+    /// Generates a token representing a string literal.
     fn lex_string(&mut self) -> Result<Token> {
         let mut val = String::new();
         let beg_pos = self.pos;
@@ -280,6 +294,7 @@ impl<'a> Lexer<'_> {
         }
     }
 
+    /// Pass over meaningless characters, i.e., whitespace and comments.
     fn skip_junk(&mut self) {
         self.skip_whitespace();
         if self.c == '/' && self.peek_char() == '/'
@@ -289,6 +304,7 @@ impl<'a> Lexer<'_> {
         }
     }
 
+    /// Helper method used to skip comments.
     fn skip_comment(&mut self) {
         // skip entire line
         while self.c != '\n' && self.c != '\0' {
@@ -296,12 +312,14 @@ impl<'a> Lexer<'_> {
         }
     }
 
+    /// Helper method used to skip whitespace characters.
     fn skip_whitespace(&mut self) {
         while self.c.is_whitespace() {
             self.next_char();
         }
     }
 
+    /// Determines whether or not the lexer is at the end of the file (EOF).
     pub fn eof(&self) -> bool {
         self.c == '\0'
     }
