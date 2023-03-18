@@ -1,3 +1,5 @@
+//! The main parsing interface.
+
 use crate::io::error::{ Result, CortexError };
 use crate::lexer::Lexer;
 use crate::ast::{
@@ -26,14 +28,19 @@ use crate::symbols::{
 };
 use crate::sess::SessCtx;
 
+/// The parser object.
 pub struct Parser<'a> {
     lexer: Lexer<'a>,
+    /// The context of the current compilation session.
     ctx: &'a SessCtx,
+    /// The current token.
     tok: Token,
+    /// The previous token.
     prev_tok: Token,
 }
 
 impl<'a> Parser<'_> {
+    /// Creates a new parser from a given context.
     pub fn new(ctx: &'a SessCtx) -> Result<Parser<'a>> {
         let mut lexer = Lexer::new(ctx);
         let tok = lexer.next_token()?;
@@ -45,6 +52,7 @@ impl<'a> Parser<'_> {
         })
     }
 
+    /// The main driver of the parser. This method parses the given file and returns its Abstract Syntax Tree (AST).
     pub fn parse(&mut self) -> Result<Vec<Box<AstNodeNew>>> {
         let mut tree = Vec::new();
         while !self.tok.is_eof() {
@@ -69,6 +77,8 @@ impl<'a> Parser<'_> {
         Ok(tree)
     }
 
+    /// Parses a compound expression, i.e., a collection of statements and/or expressions inside a
+    /// set of curly braces, `{` and `}`.
     fn parse_compound(&mut self) -> Result<Expr> {
         let mut children = Vec::new();
         self.eat(TokenKind::BraceOpen(BraceKind::Curly))?;
@@ -91,6 +101,7 @@ impl<'a> Parser<'_> {
         Ok(Expr::new(ExprKind::Compound(children)))
     }
 
+    /// Parses an include statement, e.g., `include "some_file.cx"`.
     fn parse_include(&mut self) -> Result<Expr> {
         self.advance()?; // skip 'include' kwd
         if let TokenKind::String(_) = self.tok.kind {
@@ -110,6 +121,14 @@ impl<'a> Parser<'_> {
         }
     }
 
+    /// Continues parsing according to the keyword token the parser has encountered.
+    ///
+    /// # Examples
+    /// If the parser encounters the `func` keyword, it will continue by attempting to parse a
+    /// function.
+    ///
+    /// If the parser encounters the `if` keyword, it will continue by attempting to parse an
+    /// if/else if/else statement.
     fn parse_kwd(&mut self, kwd_kind: &KwdKind) -> Result<AstNodeNew> {
         let node = match *kwd_kind {
             // early return for function
@@ -137,6 +156,7 @@ impl<'a> Parser<'_> {
         Ok(AstNodeNew::Expr(node))
     }
 
+    /// Parses a while loop.
     fn parse_while(&mut self) -> Result<Expr> {
         self.advance()?; // skip 'while' kwd
         let expr = self.parse_expr()?;
@@ -146,6 +166,7 @@ impl<'a> Parser<'_> {
         )))
     }
 
+    /// Parses an if/else if/else statement.
     fn parse_if(&mut self) -> Result<Expr> {
         self.advance()?; // skip 'if' kwd
         match self.tok.kind {
@@ -197,6 +218,7 @@ impl<'a> Parser<'_> {
         Ok(Expr::new(ExprKind::Cond(kind)))
     }
 
+    /// Parses a type annotation, e.g., `x: i32`.
     fn parse_type_annotation(&mut self, with_ident_ctx: IdentCtx) -> Result<Ident> {
         let ident = self.expect_id(format!("expected identifier but got '{}'", self.tok.value()))?;
         self.eat(TokenKind::Delim(DelimKind::Colon))?;
@@ -213,6 +235,7 @@ impl<'a> Parser<'_> {
         }
     }
 
+    /// Parses a return statement.
     fn parse_ret(&mut self) -> Result<Expr> {
         self.advance()?; // skip 'ret' kwd
         let expr = self.parse_expr()?;
@@ -220,6 +243,7 @@ impl<'a> Parser<'_> {
         Ok(Expr::new(ExprKind::Stmt(StmtKind::Ret(Some(Box::new(expr))))))
     }
 
+    /// Parses a let statement.
     fn parse_let(&mut self) -> Result<Expr> {
         self.advance()?; // skip 'let' kwd
         let ident = self.lexer.peek_token().and_then(|peek_tok| -> Result<Ident> {
@@ -250,6 +274,7 @@ impl<'a> Parser<'_> {
         Ok(Expr::new(ExprKind::Stmt(StmtKind::Let(ident, expr))))
     }
 
+    /// Parses a function.
     fn parse_func(&mut self) -> Result<Func> {
         self.advance()?; // skip 'func' kwd
         let func_id = self.expect_id(format!("expected function name but got '{}'", self.tok.value()))?;
@@ -292,6 +317,7 @@ impl<'a> Parser<'_> {
         Ok(node)
     }
 
+    /// Parses a term in an expression, i.e., a variable, literal, function call, etc..
     fn parse_term(&mut self) -> Result<Expr> {
         let node = match self.tok.kind.clone() {
             TokenKind::Num(n) => Expr::new(ExprKind::Lit(LitKind::Num(n))),
@@ -338,11 +364,14 @@ impl<'a> Parser<'_> {
         Ok(node)
     }
 
+    /// The wrapper around [`Parser::parse_expr_helper`]. This method serves as a driver for the
+    /// aforementioned function by providing a starting minimum precedence of zero.
     fn parse_expr(&mut self) -> Result<Expr> {
         let expr = self.parse_expr_helper(0)?;
         Ok(expr)
     }
 
+    /// Parses a binary expression, e.g., `(8 - 4) * 4 - 3`.
     fn parse_expr_helper(&mut self, min_prec: i32) -> Result<Expr> {
         let mut lhs = self.parse_term()?;
 
@@ -372,12 +401,14 @@ impl<'a> Parser<'_> {
         Ok(lhs)
     }
 
+    /// Requests a token from the lexer, moving through the source file.
     fn advance(&mut self) -> Result {
         self.prev_tok = self.tok.clone();
         self.tok = self.lexer.next_token()?;
         Ok(())
     }
 
+    /// Expects an identifier and returns an error if none is found.
     fn expect_id(&mut self, with_msg: String) -> Result<String> {
         let result = match &self.tok.kind {
             TokenKind::Id(ident) => Ok(ident.to_owned()),
@@ -392,6 +423,7 @@ impl<'a> Parser<'_> {
         result
     }
 
+    /// Expects to see a type and returns an error if none is found.
     fn expect_ty(&mut self) -> Result<TyKind> {
         let result = match &self.tok.kind {
             TokenKind::Ty(ty_kind) => Ok(ty_kind.to_owned()),
@@ -406,6 +438,8 @@ impl<'a> Parser<'_> {
         result
     }
 
+    /// Advances the parser by expecting a certain kind of token and returning an error if the next
+    /// token does not match the expected one.
     fn eat(&mut self, expected_kind: TokenKind) -> Result {
         let tok_expected = match (&self.tok.kind, &expected_kind) {
             (TokenKind::Num(_), TokenKind::Num(_)) => true,
