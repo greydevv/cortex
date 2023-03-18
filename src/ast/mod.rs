@@ -40,7 +40,7 @@ impl Ident {
 }
 
 #[derive(Clone, strum_macros::Display)]
-pub enum AstNodeNew {
+pub enum AstNode {
     Func(Func),
     Expr(Expr),
 }
@@ -91,7 +91,7 @@ pub enum ExprKind {
     /// Numeric literals
     Lit(LitKind),
     /// Block
-    Compound(Vec<Box<AstNodeNew>>),
+    Compound(Vec<Box<AstNode>>),
     Cond(CondKind),
 }
 
@@ -122,7 +122,7 @@ pub enum StmtKind {
     While(Box<Expr>, Box<Expr>)
 }
 
-impl AstNodeNew {
+impl AstNode {
     pub fn debug_string(&self) -> String {
         self.debug(0)
     }
@@ -154,11 +154,11 @@ trait AstDebug {
     fn debug(&self, indents: usize) -> String;
 }
 
-impl AstDebug for AstNodeNew {
+impl AstDebug for AstNode {
     fn debug(&self, indents: usize) -> String {
         match self {
-            AstNodeNew::Func(func) => func.debug(indents),
-            AstNodeNew::Expr(expr) => expr.debug(indents),
+            AstNode::Func(func) => func.debug(indents),
+            AstNode::Expr(expr) => expr.debug(indents),
         }
     }
 }

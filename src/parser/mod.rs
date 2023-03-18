@@ -1,7 +1,7 @@
 use crate::io::error::{ Result, CortexError };
 use crate::lexer::Lexer;
 use crate::ast::{
-    AstNodeNew,
+    AstNode,
     Func,
     Expr,
     Ident,
@@ -45,15 +45,15 @@ impl<'a> Parser<'_> {
         })
     }
 
-    pub fn parse(&mut self) -> Result<Vec<Box<AstNodeNew>>> {
+    pub fn parse(&mut self) -> Result<Vec<Box<AstNode>>> {
         let mut tree = Vec::new();
         while !self.tok.is_eof() {
             if let TokenKind::Kwd(kwd_kind) = &self.tok.kind {
                 let child = match kwd_kind.clone() {
                     KwdKind::Include => 
-                        AstNodeNew::Expr(self.parse_include()?),
+                        AstNode::Expr(self.parse_include()?),
                     KwdKind::Func =>
-                        AstNodeNew::Func(self.parse_func()?),
+                        AstNode::Func(self.parse_func()?),
                     _ => unimplemented!("error message for bad start keyword: '{}'", kwd_kind)
                 };
                 tree.push(Box::new(child));
@@ -77,7 +77,7 @@ impl<'a> Parser<'_> {
                 TokenKind::Id(_) | TokenKind::Num(_) => {
                     let expr = self.parse_expr()?;
                     self.eat(TokenKind::Delim(DelimKind::Scolon))?;
-                    AstNodeNew::Expr(expr)
+                    AstNode::Expr(expr)
                 },
                 TokenKind::Kwd(ref kwd_kind) => self.parse_kwd(kwd_kind)?,
                 TokenKind::BraceClosed(BraceKind::Curly) => {
@@ -110,10 +110,10 @@ impl<'a> Parser<'_> {
         }
     }
 
-    fn parse_kwd(&mut self, kwd_kind: &KwdKind) -> Result<AstNodeNew> {
+    fn parse_kwd(&mut self, kwd_kind: &KwdKind) -> Result<AstNode> {
         let node = match *kwd_kind {
             // early return for function
-            KwdKind::Func => return Ok(AstNodeNew::Func(self.parse_func()?)),
+            KwdKind::Func => return Ok(AstNode::Func(self.parse_func()?)),
             KwdKind::Include => self.parse_include()?,
             KwdKind::Let => self.parse_let()?,
             KwdKind::Ret => self.parse_ret()?,
@@ -134,7 +134,7 @@ impl<'a> Parser<'_> {
             KwdKind::While => self.parse_while()?,
             KwdKind::For => unimplemented!("parsing of for loop"),
         };
-        Ok(AstNodeNew::Expr(node))
+        Ok(AstNode::Expr(node))
     }
 
     fn parse_while(&mut self) -> Result<Expr> {
