@@ -1,3 +1,5 @@
+//! Helpers for dealing with files.
+
 use std::fs::File;
 use std::io::{ Read, ErrorKind };
 use std::fmt;
@@ -5,6 +7,7 @@ use std::fmt;
 use crate::symbols::Len;
 use crate::io::error::{ CortexError, Result };
 
+/// The object representing a source file.
 #[derive(Debug)]
 pub struct FileHandler {
     file_path: String,
@@ -12,6 +15,7 @@ pub struct FileHandler {
 }
 
 impl FileHandler {
+    /// Creates a new file handler given the file path.
     pub fn new(file_path: String) -> Result<FileHandler> {
         let mut f = File::open(&file_path).map_err(|e| FileHandler::translate_err(e, &file_path))?;
         let mut src = String::new();
@@ -22,10 +26,12 @@ impl FileHandler {
         })
     }
 
+    /// Gets the source contents.
     pub fn contents(&self) -> &String {
         &self.src
     }
 
+    /// Translates a [`std::io::Error`] into a [`CortexError`].
     fn translate_err(error: std::io::Error, file_path: &String) -> CortexError {
         let err_msg = match error.kind() {
             ErrorKind::NotFound => format!("'{file_path}' does not exist"),
@@ -36,11 +42,13 @@ impl FileHandler {
         CortexError::FileIOError(err_msg)
     }
 
+    /// Gets the file path.
     pub fn file_path(&self) -> &String {
         &self.file_path
     }
 }
 
+/// Compares file handlers based on their file path.
 impl PartialEq for FileHandler {
     fn eq(&self, other: &FileHandler) -> bool {
         self.file_path == other.file_path
@@ -51,13 +59,17 @@ impl PartialEq for FileHandler {
     }
 }
 
+/// The object describing a span of source contents.
 #[derive(PartialEq, Debug, Clone, Copy)]
 pub struct FileSpan {
+    /// Beginning position.
     pub beg: FilePos,
+    /// Ending position.
     pub end: FilePos,
 }
 
 impl FileSpan {
+    /// Creates a new file span.
     pub fn new(beg: FilePos, end: FilePos) -> FileSpan {
         FileSpan {
             beg,
@@ -65,6 +77,7 @@ impl FileSpan {
         }
     }
 
+    /// Creates a new file span of length one.
     pub fn one(beg: FilePos) -> FileSpan {
         let end = FilePos::new(beg.line, beg.col+1);
         FileSpan::new(
@@ -74,7 +87,11 @@ impl FileSpan {
 
     }
 
+    /// Creates a new file span by using the beginning of the current file span and the end of the
+    /// provided file span.
     pub fn to(&self, other: FileSpan) -> FileSpan {
+        // TODO: Do I need to check if the other file span is further along in the source code
+        // than the current file span?
         FileSpan {
             beg: self.beg.clone(),
             end: other.end.clone(),
@@ -95,6 +112,7 @@ impl fmt::Display for FileSpan {
     }
 }
 
+/// The object describing a position in a file.
 #[derive(PartialEq, Debug, Copy, Clone)]
 pub struct FilePos {
     pub line: usize,
@@ -102,6 +120,7 @@ pub struct FilePos {
 }
 
 impl FilePos {
+    /// Creates a new file position.
     pub fn new(line: usize, col: usize) -> FilePos {
         FilePos {
             line,
@@ -109,6 +128,8 @@ impl FilePos {
         }
     }
 
+    /// Creates a default file position, starting at the first line and column (first character of
+    /// any text-based file).
     pub fn default() -> FilePos {
         FilePos::new(1, 1)
     }
