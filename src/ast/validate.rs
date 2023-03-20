@@ -3,7 +3,7 @@
 use std::collections::{ HashMap, VecDeque };
 use std::convert::From;
 
-use crate::symbols::{ TyKind, BinOpKind };
+use crate::symbols::{ TyKind, BinOpKind, UnaryOpKind };
 use crate::io::error::Result;
 use crate::ast::{
     AstNode,
@@ -234,7 +234,10 @@ impl Validator {
             }
             ExprKind::Stmt(ref mut stmt_kind) => self.validate_stmt(stmt_kind),
             ExprKind::Cond(ref mut cond_kind) => self.validate_cond(cond_kind),
-            _ => unimplemented!("{}", expr.kind),
+            ExprKind::Unary(ref unary_op_kind, ref mut expr) => {
+                let expr_ty = self.validate_expr(expr)?;
+                self.validate_unary_op(unary_op_kind, &expr_ty)
+            },
         }
     }
 
@@ -308,6 +311,15 @@ impl Validator {
     fn expect_bool_from(&mut self, expr: &mut Expr) -> Result {
         self.validate_expr(expr)
             .and_then(|ref ty_kind| TyKind::Bool.compat(ty_kind))
+    }
+
+    fn validate_unary_op(&self, unary_op_kind: &UnaryOpKind, expr_ty: &TyKind) -> Result<TyKind> {
+        let op_ty = match unary_op_kind {
+            UnaryOpKind::Not => TyKind::Bool,
+            UnaryOpKind::Neg => TyKind::Int(32),
+        };
+        op_ty.compat(expr_ty)
+            .and_then(|_| Ok(op_ty))
     }
 
     /// Helper method for validating a binary operator.
