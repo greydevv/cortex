@@ -386,6 +386,8 @@ impl<'a> Parser<'_> {
         Ok(Expr::new(expr_kind))
     }
 
+    /// Parses a comma separated list of expressions, such as expressions passed as arguments to
+    /// function calls.
     fn parse_comma_sep_expr(&mut self) -> Result<Vec<Box<Expr>>> {
         let mut exprs = Vec::new();
         loop {

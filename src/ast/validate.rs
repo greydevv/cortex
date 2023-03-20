@@ -326,6 +326,7 @@ impl Validator {
             .and_then(|ref ty_kind| TyKind::Bool.compat(ty_kind))
     }
 
+    /// Helper method for validating a unary operation.
     fn validate_unary_op(&self, unary_op_kind: &UnaryOpKind, expr_ty: &TyKind) -> Result<TyKind> {
         let op_ty = match unary_op_kind {
             UnaryOpKind::Not => TyKind::Bool,
@@ -335,7 +336,7 @@ impl Validator {
             .and_then(|_| Ok(op_ty))
     }
 
-    /// Helper method for validating a binary operator.
+    /// Helper method for validating a binary operation.
     fn validate_bin_op(&self, bin_op_kind: &BinOpKind, lhs_ty: &TyKind, rhs_ty: &TyKind) -> Result<TyKind> {
         lhs_ty.compat(rhs_ty)?;
         let op_ty = match bin_op_kind {
