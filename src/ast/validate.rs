@@ -1,6 +1,6 @@
 //! The main AST validation interface.
 
-use std::collections::HashMap;
+use std::collections::{ HashMap, VecDeque };
 use std::convert::From;
 
 use crate::symbols::{ TyKind, BinOpKind };
@@ -53,6 +53,67 @@ impl From<&Ident> for IdentInfo {
     }
 }
 
+/// A wrapper around `Vec` to manage symbol tables belonging to different scopes.
+///
+/// Each scope is associated with its own [`SymbolTable`]. When a scope is being validated, a new
+/// symbol table is constructed and placed in the front of the queue. Subsequent symbol table
+/// entries in the queue belong to ancestors of the scope currently being validated. When scopes
+/// are finished being validated, its associated symbol table is popped from the queue to prohibit
+/// other scopes from illegalay referencing symbols which are no longer in scope.
+struct SymbolTableList {
+    /// The wrapped list of symbol tables.
+    inner: VecDeque<SymbolTable>,
+}
+
+impl SymbolTableList {
+    /// Creates a new symbol table list.
+    pub fn new() -> SymbolTableList {
+        SymbolTableList {
+            inner: VecDeque::new(),
+        }
+    }
+
+    /// Queries the symbol table with the given identifier.
+    ///
+    /// This method iterates over each symbol table attempting to find the queried symbol. If the
+    /// symbol is not found `None` is returned.
+    pub fn query(&mut self, ident: &Ident) -> Option<&IdentInfo> {
+        for symb_tab in &mut self.inner {
+            if let Some(q_ident) = symb_tab.query(ident) {
+                return Some(q_ident);
+            }
+        }
+        None
+    }
+
+    /// Attempts to insert an identifier into the symbol table.
+    ///
+    /// This method iterates over each symbol table attempting to find a conflicting entry. If none
+    /// is found, `None` is returned. Otherwise, the result of [`SymbolTable::try_insert`] is
+    /// returned.
+    pub fn try_insert<'a>(&'a mut self, ident: &'a Ident) -> Option<&Ident> {
+        // TODO: Return the occupying IdentInfo instead. This could be useful for underlining (in
+        // the error) the definition of the already defined identifier.
+        for symb_tab in &mut self.inner {
+            if symb_tab.query(ident).is_some() {
+                return Some(ident);
+            }
+        }
+        self.inner.front_mut()
+            .and_then(|curr_symb_tab| curr_symb_tab.try_insert(ident))
+    }
+
+    /// Pushes a new symbol table to the front of the queue.
+    pub fn push(&mut self) {
+        self.inner.push_front(SymbolTable::new());
+    }
+
+    /// Pops a symbol table from the front of the queue.
+    pub fn pop(&mut self) {
+        self.inner.pop_front();
+    }
+}
+
 /// The symbol table object.
 struct SymbolTable {
     /// The wrapped symbol table.
@@ -71,6 +132,8 @@ impl SymbolTable {
     ///
     /// If the identifier is found, its reference count is then updated.
     pub fn query(&mut self, ident: &Ident) -> Option<&IdentInfo> {
+        // TODO: Ref count isn't used right now, but implication of calling this method without
+        // intent of updating ref count could cause unintended bugs. Investigate!
         self.inner.get_mut(ident.raw())
             .and_then(|info| {
                 info.update_ref_count();
@@ -97,14 +160,19 @@ impl SymbolTable {
 /// The validator object.
 pub struct Validator {
     /// Global symbol table.
-    glob: SymbolTable,
+    // TODO: Currently, only one global symbol table for testing purposes and initial
+    // implementation. This needs changed to support anything other than one function.
+    symb_tab: SymbolTableList,
 }
 
 impl Validator {
     /// Creates a new validator object.
     pub fn new() -> Validator {
+        let mut symb_tab = SymbolTableList::new();
+        // initialize global symbol table
+        symb_tab.push();
         Validator {
-            glob: SymbolTable::new(),
+            symb_tab
         }
     }
 
@@ -128,13 +196,18 @@ impl Validator {
 
     /// Validates a function node.
     fn validate_func(&mut self, func: &mut Func) -> Result<TyKind> {
+        // put func ident in parent's symbol table (before the function's symbol table is
+        // initialized)
         let ret_ty_kind = self.validate_ident(&mut func.ident)?;
+        // initialize function's symbol table
+        self.symb_tab.push();
         func.params.iter_mut()
             .try_for_each(|p| -> Result {
                 self.validate_ident(p)?;
                 Ok(())
             })?;
         self.validate_expr(&mut func.body)?;
+        self.symb_tab.pop();
         Ok(ret_ty_kind)
     }
 
@@ -144,11 +217,13 @@ impl Validator {
             ExprKind::Id(ref mut ident) => self.validate_ident(ident),
             ExprKind::Lit(ref lit_kind) => Ok(self.validate_lit(lit_kind)),
             ExprKind::Compound(ref mut children) => {
+                self.symb_tab.push();
                 children.iter_mut()
                     .try_for_each(|c| -> Result {
                         self.validate_node(c)?;
                         Ok(())
                     })?;
+                self.symb_tab.pop();
                 Ok(TyKind::Void)
             },
             ExprKind::Binary(ref op_kind, ref mut lhs, ref mut rhs) => {
@@ -193,7 +268,7 @@ impl Validator {
         }
     }
 
-    /// Determined.
+    /// Determines, based on its context, if the identifier is valid.
     ///
     /// If the identifier is `x` and the context is [`IdentCtx::Ref`], the validator needs to make
     /// sure `x` is an already defined symbol. If instead the context of `x` is [`IdentCtx::Def`],
@@ -204,12 +279,12 @@ impl Validator {
                 | IdentCtx::Param
                 | IdentCtx::FuncDef =>
                     // format error based on context (param, func, variable)
-                    match self.glob.try_insert(ident) {
+                    match self.symb_tab.try_insert(ident) {
                         Some(_) => todo!("PROPER ERROR: defined symbol '{}' already exists!", ident.raw()),
                         None => Ok(*ident.ty_kind())
                     }
             IdentCtx::Ref =>
-                self.glob.query(ident)
+                self.symb_tab.query(ident)
                     // format error based on context (param, func, variable)
                     .ok_or_else(|| todo!("PROPER ERROR: referenced symbol '{}' doesn't exist!", ident.raw()))
                     .and_then(|info| {
