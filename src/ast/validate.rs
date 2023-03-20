@@ -266,7 +266,11 @@ impl Validator {
                 // validate the variable being defined isn't used in its own definition by
                 // validating the right-hand side of the equals sign first
                 self.validate_expr(expr)
-                    .and_then(|_| self.validate_ident(ident)),
+                    .and_then(|rhs_ty_kind| {
+                        self.validate_ident(ident)?;
+                        ident.update_ty(rhs_ty_kind);
+                        Ok(rhs_ty_kind)
+                    }),
             _ => unimplemented!()
         }
     }
