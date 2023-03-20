@@ -13,6 +13,8 @@ pub enum IdentCtx {
     Ref,
     /// Function parameter.
     Param,
+    /// Invocation (function call).
+    FuncCall,
     /// Function definition.
     FuncDef,
 }
@@ -103,6 +105,8 @@ pub enum ExprKind {
     Id(Ident),
     /// Numeric literals.
     Lit(LitKind),
+    /// Invocations (function calls).
+    Call(Ident, Vec<Box<Expr>>),
     /// Collection of expressions (block).
     Compound(Vec<Box<AstNode>>),
     /// Conditionals (if, while, etc.).
@@ -245,6 +249,25 @@ impl AstDebug for Expr {
                     ident.raw(),
                     ident.ty_kind(),
                     ident.ctx(),
+                ),
+            ExprKind::Call(ident, args) if args.len() == 0 =>
+                // no args
+                format!("({})", ident.raw()),
+            ExprKind::Call(ident, args) =>
+                format!("({})\n{}Args\n{}",
+                    ident.raw(),
+                    "  ".repeat(indents+1),
+                    args.iter()
+                    // need to check if child is not last
+                        .enumerate()
+                        .map(|(i, arg)| -> String {
+                            if i == args.len() - 1 { 
+                                arg.debug(indents+2)
+                            } else { 
+                                arg.debug(indents+2) + "\n"
+                            }
+                        })
+                        .collect::<String>()
                 ),
             ExprKind::Cond(cond_kind) =>
                 match cond_kind {

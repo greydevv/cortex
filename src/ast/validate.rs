@@ -238,6 +238,15 @@ impl Validator {
                 let expr_ty = self.validate_expr(expr)?;
                 self.validate_unary_op(unary_op_kind, &expr_ty)
             },
+            ExprKind::Call(ref mut ident, ref mut args) => {
+                let func_ret_ty = self.validate_ident(ident)?;
+                args.iter_mut()
+                    .try_for_each(|a| -> Result {
+                        self.validate_expr(a)?;
+                        Ok(())
+                    })?;
+                Ok(func_ret_ty)
+            }
         }
     }
 
@@ -263,7 +272,7 @@ impl Validator {
     fn validate_stmt(&mut self, stmt_kind: &mut StmtKind) -> Result<TyKind> {
         match stmt_kind {
             StmtKind::Let(ref mut ident, ref mut expr) =>
-                // validate the variable being defined isn't used in its own definition by
+                // make sure the variable being defined isn't used in its own definition by
                 // validating the right-hand side of the equals sign first
                 self.validate_expr(expr)
                     .and_then(|rhs_ty_kind| {
@@ -290,15 +299,15 @@ impl Validator {
                         Some(_) => todo!("PROPER ERROR: defined symbol '{}' already exists!", ident.raw()),
                         None => Ok(*ident.ty_kind())
                     }
-            IdentCtx::Ref =>
-                self.symb_tab.query(ident)
-                    // format error based on context (param, func, variable)
-                    .ok_or_else(|| todo!("PROPER ERROR: referenced symbol '{}' doesn't exist!", ident.raw()))
-                    .and_then(|info| {
-                        ident.update_ty(info.ty_kind);
-                        Ok(info.ty_kind)
-                    })
-                        
+            IdentCtx::Ref
+                | IdentCtx::FuncCall =>
+                    self.symb_tab.query(ident)
+                        // format error based on context (param, func, variable)
+                        .ok_or_else(|| todo!("PROPER ERROR: referenced symbol '{}' doesn't exist!", ident.raw()))
+                        .and_then(|info| {
+                            ident.update_ty(info.ty_kind);
+                            Ok(info.ty_kind)
+                        })
         }
     } 
 

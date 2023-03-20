@@ -269,7 +269,7 @@ impl<'a> Parser<'_> {
         // TODO: a bit hacky, but works for now. essentially, the left-hand side of the let
         // expression is parsed here instead of self.parse_expr() so the type annotation can be
         // captured properly. then, an expr is just returned anyways.
-        let expr = Box::new(self.parse_expr()?);
+        let expr = Box::new (self.parse_expr()?);
         self.eat(TokenKind::Delim(DelimKind::Scolon))?;
         Ok(Expr::new(ExprKind::Stmt(StmtKind::Let(ident, expr))))
     }
@@ -336,14 +336,7 @@ impl<'a> Parser<'_> {
                     Box::new(self.parse_term()?)
                 )));
             },
-            TokenKind::Id(ref id) => 
-                Expr::new(ExprKind::Id(
-                    Ident::new(
-                        id,
-                        TyKind::Lookup,
-                        IdentCtx::Ref,
-                    )
-                )),
+            TokenKind::Id(ref id) => return self.parse_ident_or_call(id),
             TokenKind::BraceOpen(ref brace_kind) if *brace_kind == BraceKind::Paren => {
                 // pass opening parenthesis
                 self.advance()?;
@@ -362,6 +355,51 @@ impl<'a> Parser<'_> {
         };
         self.advance()?;
         Ok(node)
+    }
+
+    /// Parses a basic identifier or a function call if the identifier is followed by opening
+    /// parenthesis.
+    fn parse_ident_or_call(&mut self, ident: &String) -> Result<Expr> {
+        self.advance()?; // skip id token
+        let expr_kind = match self.tok.kind {
+            TokenKind::BraceOpen(BraceKind::Paren) => {
+                self.advance()?; // skip opening parenthesis
+                ExprKind::Call(
+                    Ident::new(
+                        ident,
+                        TyKind::Lookup,
+                        IdentCtx::FuncCall,
+                    ),
+                    self.parse_comma_sep_expr()?
+                )
+            }
+            _ => 
+                ExprKind::Id(
+                    Ident::new(
+                        ident,
+                        TyKind::Lookup,
+                        IdentCtx::Ref,
+                    )
+                )
+        };
+
+        Ok(Expr::new(expr_kind))
+    }
+
+    fn parse_comma_sep_expr(&mut self) -> Result<Vec<Box<Expr>>> {
+        let mut exprs = Vec::new();
+        loop {
+            if let TokenKind::BraceClosed(BraceKind::Paren) = self.tok.kind {
+                self.advance()?; // skip closing parenthesis
+                break;
+            }
+            exprs.push(Box::new(self.parse_expr()?));
+            if let TokenKind::Delim(DelimKind::Comma) = self.tok.kind {
+                self.advance()?;
+            }
+        }
+
+        Ok(exprs)
     }
 
     /// The wrapper around [`Parser::parse_expr_helper`]. This method serves as a driver for the
