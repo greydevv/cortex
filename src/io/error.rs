@@ -8,6 +8,7 @@ use colored::Colorize;
 use clap::error::ContextKind;
 use clap::error::Error as ClapError;
 
+use crate::ast::{ Ident, IdentCtx };
 use crate::io::file::{ FileHandler, FileSpan };
 use crate::symbols::{ Token, Len };
 use crate::sess::SessCtx;
@@ -96,6 +97,39 @@ impl CortexError {
             msg: format!("unopened '{}'", tok.value()),
             span: tok.span,
             help: None
+        }
+    }
+
+    /// Creates an error describing an illegal reference or definition of an identifier.
+    pub fn illegal_ident(ctx: &SessCtx, ident: &Ident) -> CortexError {
+        let msg = match ident.ctx() {
+            IdentCtx::Def
+                | IdentCtx::Param
+                | IdentCtx::FuncDef =>
+                    format!(
+                        "'{}' was already defined",
+                        ident.raw(),
+                    ),
+            IdentCtx::Ref =>
+                    format!(
+                        "variable '{}' does not exist",
+                        ident.raw(),
+                    ),
+            IdentCtx::FuncCall =>
+                    format!(
+                        "function '{}' does not exist",
+                        ident.raw(),
+                    ),
+        };
+        CortexError::SyntaxError {
+            file_path: ctx.file_path(),
+            msg,
+            span: *ident.span(),
+            // TODO: Accept conflicting ident (if any) as a parameter and put it in the help. For
+            // example, if the variable 'sum' cannot be defined because it's a function defined
+            // elsewhere, the help should note the sum was previously defined as a function and
+            // underline it.
+            help: None,
         }
     }
 }
