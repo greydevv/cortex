@@ -220,11 +220,12 @@ impl<'a> Parser<'_> {
 
     /// Parses a type annotation, e.g., `x: i32`.
     fn parse_type_annotation(&mut self, with_ident_ctx: IdentCtx) -> Result<Ident> {
+        let ident_span = self.tok.span;
         let ident = self.expect_id(format!("expected identifier but got '{}'", self.tok.value()))?;
         self.eat(TokenKind::Delim(DelimKind::Colon))?;
         if let TokenKind::Ty(ty_kind) = self.tok.kind.clone() {
             self.advance()?; // skip type
-            Ok(Ident::new(&ident, ty_kind, with_ident_ctx))
+            Ok(Ident::new(&ident, ty_kind, with_ident_ctx, ident_span))
         } else {
             Err(CortexError::SyntaxError {
                 file_path: self.ctx.file_path(),
@@ -250,12 +251,15 @@ impl<'a> Parser<'_> {
             match peek_tok.kind {
                 TokenKind::Delim(DelimKind::Colon) =>
                     self.parse_type_annotation(IdentCtx::Def),
-                TokenKind::BinOp(BinOpKind::Eql) =>
+                TokenKind::BinOp(BinOpKind::Eql) => {
+                    let ident_span = self.tok.span;
                     Ok(Ident::new(
                         &self.expect_id(format!("expected identifier but got '{}'", self.tok.value()))?,
                         TyKind::Infer,
                         IdentCtx::Def,
-                    )),
+                        ident_span,
+                    ))
+                },
                 _ =>
                     Err(CortexError::SyntaxError {
                         file_path: self.ctx.file_path(),
@@ -277,7 +281,8 @@ impl<'a> Parser<'_> {
     /// Parses a function.
     fn parse_func(&mut self) -> Result<Func> {
         self.advance()?; // skip 'func' kwd
-        let func_id = self.expect_id(format!("expected function name but got '{}'", self.tok.value()))?;
+        let func_ident_span = self.tok.span;
+        let func_ident = self.expect_id(format!("expected function name but got '{}'", self.tok.value()))?;
         self.eat(TokenKind::BraceOpen(BraceKind::Paren))?;
         let mut params = Vec::new();
         if let TokenKind::Id(_) = self.tok.kind {
@@ -310,7 +315,7 @@ impl<'a> Parser<'_> {
         };
         let body = self.parse_compound()?;
         let node = Func::new(
-            Ident::new(&func_id, ret_ty, IdentCtx::FuncDef),
+            Ident::new(&func_ident, ret_ty, IdentCtx::FuncDef, func_ident_span),
             params,
             Box::new(body),
         );
@@ -360,6 +365,7 @@ impl<'a> Parser<'_> {
     /// Parses a basic identifier or a function call if the identifier is followed by opening
     /// parenthesis.
     fn parse_ident_or_call(&mut self, ident: &String) -> Result<Expr> {
+        let ident_span = self.tok.span;
         self.advance()?; // skip id token
         let expr_kind = match self.tok.kind {
             TokenKind::BraceOpen(BraceKind::Paren) => {
@@ -369,6 +375,7 @@ impl<'a> Parser<'_> {
                         ident,
                         TyKind::Lookup,
                         IdentCtx::FuncCall,
+                        ident_span,
                     ),
                     self.parse_comma_sep_expr()?
                 )
@@ -379,6 +386,7 @@ impl<'a> Parser<'_> {
                         ident,
                         TyKind::Lookup,
                         IdentCtx::Ref,
+                        ident_span,
                     )
                 )
         };

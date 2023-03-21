@@ -1,6 +1,7 @@
 //! The AST objects and validator.
 
 use crate::symbols::{ TyKind, BinOpKind, UnaryOpKind };
+use crate::io::file::FileSpan;
 
 pub mod validate;
 
@@ -21,32 +22,46 @@ pub enum IdentCtx {
 
 /// The identifier object.
 #[derive(Clone)]
-pub struct Ident(String, TyKind, IdentCtx);
+pub struct Ident {
+    raw: String,
+    ty_kind: TyKind,
+    ctx: IdentCtx,
+    span: FileSpan,
+}
 
 impl Ident {
     /// Creates an identifier.
-    pub fn new(ident: &String, ty_kind: TyKind, ctx: IdentCtx) -> Ident {
-        Ident(ident.clone(), ty_kind, ctx)
+    pub fn new(ident: &String, ty_kind: TyKind, ctx: IdentCtx, span: FileSpan) -> Ident {
+        Ident {
+            raw: ident.clone(),
+            ty_kind,
+            ctx,
+            span,
+        }
     }
 
     /// Gets the raw identifier.
     pub fn raw(&self) -> &String {
-        &self.0
+        &self.raw
     }
 
     /// Gets the identifier's type.
     pub fn ty_kind(&self) -> &TyKind {
-        &self.1
+        &self.ty_kind
     }
 
     /// Sets the identifier's type.
     pub fn update_ty(&mut self, ty_kind: TyKind) {
-        self.1 = ty_kind;
+        self.ty_kind = ty_kind;
     }
 
     /// Gets the identifier's context.
     pub fn ctx(&self) -> &IdentCtx {
-        &self.2
+        &self.ctx
+    }
+
+    pub fn span(&self) -> &FileSpan {
+        &self.span
     }
 }
 
