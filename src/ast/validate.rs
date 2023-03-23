@@ -4,7 +4,6 @@ use std::collections::{
     HashMap,
     VecDeque
 };
-use std::convert::From;
 
 use crate::symbols::{ TyKind, BinOpKind, UnaryOpKind };
 use crate::io::error::Result;
@@ -22,40 +21,12 @@ use crate::ast::{
 use crate::io::error::CortexError;
 use crate::sess::SessCtx;
 
-/// Describes an identifier in the symbol table.
-#[derive(Clone)]
-struct IdentInfo {
-    /// The type of the identifier.
-    ty_kind: TyKind,
-    /// The context of the identifier.
-    ident_ctx: IdentCtx,
-}
-
-impl IdentInfo {
-    /// Creates a new identifier information object.
-    pub fn new(ty_kind: TyKind, ident_ctx: IdentCtx) -> IdentInfo {
-        IdentInfo {
-            ty_kind,
-            ident_ctx,
-        }
-    }
-}
-
-impl From<&Ident> for IdentInfo {
-    fn from(ident: &Ident) -> IdentInfo {
-        IdentInfo::new(
-            *ident.ty_kind(),
-            *ident.ctx(),
-        )
-    }
-}
-
 /// The symbol table object.
 struct SymbolTable {
     // Global scope
-    global: HashMap<String, IdentInfo>,
+    global: HashMap<String, Ident>,
     // Nested scopes
-    scopes: VecDeque<HashMap<String, IdentInfo>>,
+    scopes: VecDeque<HashMap<String, Ident>>,
 }
 
 impl SymbolTable {
@@ -86,7 +57,7 @@ impl SymbolTable {
     }
 
     /// Returns a mutable reference to the current scope.
-    fn current_scope(&mut self) -> &mut HashMap<String, IdentInfo> {
+    fn current_scope(&mut self) -> &mut HashMap<String, Ident> {
         self.scopes.front_mut()
             .unwrap_or_else(|| &mut self.global)
     }
@@ -95,7 +66,7 @@ impl SymbolTable {
     ///
     /// If the entry does not exist, `None` is returned. Otherwise, `Some` is returned containing a
     /// reference to the entry.
-    pub fn try_query(&self, ident: &Ident) -> Option<&IdentInfo> {
+    pub fn try_query(&self, ident: &Ident) -> Option<&Ident> {
         for scope in &self.scopes {
             if scope.contains_key(ident.raw()) {
                 return scope.get(ident.raw());
@@ -108,15 +79,11 @@ impl SymbolTable {
     ///
     /// If insertion fails, i.e., there exists a matching entry in the symbol table, `Some` is
     /// returned containing that entry. Otherwise, `None` signifies a successful insertion.
-    pub fn try_insert(&mut self, ident: &Ident) -> Option<IdentInfo> {
-        let key = ident.raw();
-        let val = IdentInfo::from(ident);
-
+    pub fn try_insert(&mut self, ident: &Ident) -> Option<Ident> {
         if let Some(conflict) = self.try_query(ident) {
             return Some(conflict.clone());
         }
-
-        if self.current_scope().try_insert(key.clone(), val).is_err() {
+        if self.current_scope().try_insert(ident.raw().clone(), ident.clone()).is_err() {
             Some(self.try_query(ident).unwrap().clone())
         } else {
             None
