@@ -1,6 +1,9 @@
 //! The main AST validation interface.
 
-use std::collections::{ HashMap, VecDeque };
+use std::collections::{
+    HashMap,
+    VecDeque
+};
 use std::convert::From;
 
 use crate::symbols::{ TyKind, BinOpKind, UnaryOpKind };
@@ -16,16 +19,16 @@ use crate::ast::{
     Ident,
     IdentCtx,
 };
+use crate::io::error::CortexError;
+use crate::sess::SessCtx;
 
 /// Describes an identifier in the symbol table.
+#[derive(Clone)]
 struct IdentInfo {
     /// The type of the identifier.
     ty_kind: TyKind,
-    #[allow(dead_code)]
     /// The context of the identifier.
     ident_ctx: IdentCtx,
-    /// How many times this identifier has been referenced.
-    ref_count: u32,
 }
 
 impl IdentInfo {
@@ -34,13 +37,7 @@ impl IdentInfo {
         IdentInfo {
             ty_kind,
             ident_ctx,
-            ref_count: 0,
         }
-    }
-
-    /// Updates the number of times this particular identifier has been referenced.
-    pub fn update_ref_count(&mut self) {
-        self.ref_count += 1;
     }
 }
 
@@ -53,126 +50,98 @@ impl From<&Ident> for IdentInfo {
     }
 }
 
-/// A wrapper around `Vec` to manage symbol tables belonging to different scopes.
-///
-/// Each scope is associated with its own [`SymbolTable`]. When a scope is being validated, a new
-/// symbol table is constructed and placed in the front of the queue. Subsequent symbol table
-/// entries in the queue belong to ancestors of the scope currently being validated. When scopes
-/// are finished being validated, its associated symbol table is popped from the queue to prohibit
-/// other scopes from illegalay referencing symbols which are no longer in scope.
-struct SymbolTableList {
-    /// The wrapped list of symbol tables.
-    inner: VecDeque<SymbolTable>,
-}
-
-impl SymbolTableList {
-    /// Creates a new symbol table list.
-    pub fn new() -> SymbolTableList {
-        SymbolTableList {
-            inner: VecDeque::new(),
-        }
-    }
-
-    /// Queries the symbol table with the given identifier.
-    ///
-    /// This method iterates over each symbol table attempting to find the queried symbol. If the
-    /// symbol is not found `None` is returned.
-    pub fn query(&mut self, ident: &Ident) -> Option<&IdentInfo> {
-        for symb_tab in &mut self.inner {
-            if let Some(q_ident) = symb_tab.query(ident) {
-                return Some(q_ident);
-            }
-        }
-        None
-    }
-
-    /// Attempts to insert an identifier into the symbol table.
-    ///
-    /// This method iterates over each symbol table attempting to find a conflicting entry. If none
-    /// is found, `None` is returned. Otherwise, the result of [`SymbolTable::try_insert`] is
-    /// returned.
-    pub fn try_insert<'a>(&'a mut self, ident: &'a Ident) -> Option<&Ident> {
-        // TODO: Return the occupying IdentInfo instead. This could be useful for underlining (in
-        // the error) the definition of the already defined identifier.
-        for symb_tab in &mut self.inner {
-            if symb_tab.query(ident).is_some() {
-                return Some(ident);
-            }
-        }
-        self.inner.front_mut()
-            .and_then(|curr_symb_tab| curr_symb_tab.try_insert(ident))
-    }
-
-    /// Pushes a new symbol table to the front of the queue.
-    pub fn push(&mut self) {
-        self.inner.push_front(SymbolTable::new());
-    }
-
-    /// Pops a symbol table from the front of the queue.
-    pub fn pop(&mut self) {
-        self.inner.pop_front();
-    }
-}
-
 /// The symbol table object.
 struct SymbolTable {
-    /// The wrapped symbol table.
-    inner: HashMap<String, IdentInfo>
+    // Global scope
+    global: HashMap<String, IdentInfo>,
+    // Nested scopes
+    scopes: VecDeque<HashMap<String, IdentInfo>>,
 }
 
 impl SymbolTable {
-    /// Creates a new (empty) symbol table.
+    /// Creates a new symbol table.
     pub fn new() -> SymbolTable {
         SymbolTable {
-            inner: HashMap::new()
+            // global scope
+            global: HashMap::new(),
+            // nested scopes
+            scopes: VecDeque::new()
         }
     }
 
-    /// Queries the symbol table with the given identifier.
+    /// Pushes a scope to the front of the queue.
     ///
-    /// If the identifier is found, its reference count is then updated.
-    pub fn query(&mut self, ident: &Ident) -> Option<&IdentInfo> {
-        // TODO: Ref count isn't used right now, but implication of calling this method without
-        // intent of updating ref count could cause unintended bugs. Investigate!
-        self.inner.get_mut(ident.raw())
-            .and_then(|info| {
-                info.update_ref_count();
-                Some(&*info)
-            })
+    /// This is called whenever a new (nested) scope is introduced.
+    pub fn push_scope(&mut self) {
+        self.scopes.push_front(HashMap::new());
     }
 
-    /// Attempts to insert an identifier into the symbol table.
+    /// Pops a scope from the front of the queue.
     ///
-    /// If insertion is successful, `None` is returned. Otherwise, the identifier that couldn't be
-    /// inserted is returned.
-    pub fn try_insert<'a>(&'a mut self, ident: &'a Ident) -> Option<&Ident> {
-        // TODO: Return the occupying IdentInfo instead. This could be useful for underlining (in
-        // the error) the definition of the already defined identifier.
-        if let Some(_) = self.query(ident) {
-            Some(ident)
+    /// This is called whenever a scope ends. If the parent scope is the global scope, the `scopes`
+    /// vector will be empty. If this scope's parent scope is another nested scope, the current
+    /// scope is popped to make the parent scope the current scope.
+    pub fn pop_scope(&mut self) {
+        self.scopes.pop_front();
+    }
+
+    /// Returns a mutable reference to the current scope.
+    fn current_scope(&mut self) -> &mut HashMap<String, IdentInfo> {
+        self.scopes.front_mut()
+            .unwrap_or_else(|| &mut self.global)
+    }
+
+    /// Queries the symbol table.
+    ///
+    /// If the entry does not exist, `None` is returned. Otherwise, `Some` is returned containing a
+    /// reference to the entry.
+    pub fn try_query(&self, ident: &Ident) -> Option<&IdentInfo> {
+        for scope in &self.scopes {
+            if scope.contains_key(ident.raw()) {
+                return scope.get(ident.raw());
+            }
+        }
+        self.global.get(ident.raw())
+    }
+
+    /// Inserts an entry into the symbol table.
+    ///
+    /// If insertion fails, i.e., there exists a matching entry in the symbol table, `Some` is
+    /// returned containing that entry. Otherwise, `None` signifies a successful insertion.
+    pub fn try_insert(&mut self, ident: &Ident) -> Option<IdentInfo> {
+        let key = ident.raw();
+        let val = IdentInfo::from(ident);
+
+        if let Some(conflict) = self.try_query(ident) {
+            return Some(conflict.clone());
+        }
+
+        if self.current_scope().try_insert(key.clone(), val).is_err() {
+            Some(self.try_query(ident).unwrap().clone())
         } else {
-            self.inner.insert(ident.raw().clone(), IdentInfo::from(ident));
             None
         }
     }
 }
 
 /// The validator object.
-pub struct Validator {
-    /// Global symbol table.
-    // TODO: Currently, only one global symbol table for testing purposes and initial
-    // implementation. This needs changed to support anything other than one function.
-    symb_tab: SymbolTableList,
+pub struct Validator<'a> {
+    /// The context of the current compilation session.
+    ctx: &'a SessCtx,
+    symb_tab: SymbolTable,
 }
 
-impl Validator {
+impl<'a> Validator<'_> {
     /// Creates a new validator object.
-    pub fn new() -> Validator {
-        let mut symb_tab = SymbolTableList::new();
+    pub fn new(ctx: &'a SessCtx) -> Validator<'a> {
+        // let symb_tab = SymbolTableList::new();
         // initialize global symbol table
-        symb_tab.push();
+        // symb_tab.push();
         Validator {
-            symb_tab
+            ctx,
+            symb_tab: SymbolTable::new(),
+            // glob_symb_tab: SymbolTable::new(),
+            // symb_tab,
         }
     }
 
@@ -200,14 +169,14 @@ impl Validator {
         // initialized)
         let ret_ty_kind = self.validate_ident(&mut func.ident)?;
         // initialize function's symbol table
-        self.symb_tab.push();
+        self.symb_tab.push_scope();
         func.params.iter_mut()
             .try_for_each(|p| -> Result {
                 self.validate_ident(p)?;
                 Ok(())
             })?;
         self.validate_expr(&mut func.body)?;
-        self.symb_tab.pop();
+        self.symb_tab.pop_scope();
         Ok(ret_ty_kind)
     }
 
@@ -217,13 +186,13 @@ impl Validator {
             ExprKind::Id(ref mut ident) => self.validate_ident(ident),
             ExprKind::Lit(ref lit_kind) => Ok(self.validate_lit(lit_kind)),
             ExprKind::Compound(ref mut children) => {
-                self.symb_tab.push();
+                self.symb_tab.push_scope();
                 children.iter_mut()
                     .try_for_each(|c| -> Result {
                         self.validate_node(c)?;
                         Ok(())
                     })?;
-                self.symb_tab.pop();
+                self.symb_tab.pop_scope();
                 Ok(TyKind::Void)
             },
             ExprKind::Binary(ref op_kind, ref mut lhs, ref mut rhs) => {
@@ -296,18 +265,17 @@ impl Validator {
                 | IdentCtx::FuncDef =>
                     // format error based on context (param, func, variable)
                     match self.symb_tab.try_insert(ident) {
-                        Some(_) => todo!("PROPER ERROR: defined symbol '{}' already exists!", ident.raw()),
-                        None => Ok(*ident.ty_kind())
-                    }
+                        Some(_) => Err(CortexError::illegal_ident(&self.ctx, &ident).into()),
+                        None => Ok(ident.ty_kind),
+                    },
             IdentCtx::Ref
                 | IdentCtx::FuncCall =>
-                    self.symb_tab.query(ident)
-                        // format error based on context (param, func, variable)
-                        .ok_or_else(|| todo!("PROPER ERROR: referenced symbol '{}' doesn't exist!", ident.raw()))
-                        .and_then(|info| {
-                            ident.update_ty(info.ty_kind);
-                            Ok(info.ty_kind)
-                        })
+                    match self.symb_tab.try_query(ident) {
+                        Some(def_ident) => {
+                            ident.update_ty(def_ident.ty_kind);
+                            Ok(ident.ty_kind)
+                        },
+                        None => Err(CortexError::illegal_ident(&self.ctx, &ident).into()),                    },
         }
     } 
 
@@ -354,3 +322,8 @@ impl Validator {
         Ok(op_ty)
     }
 }
+
+
+
+
+

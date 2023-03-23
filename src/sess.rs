@@ -46,7 +46,7 @@ impl Session {
         let mut parser = Parser::new(&ctx)?;
         parser.parse()
             .and_then(|ref mut tree| {
-                let mut vd = Validator::new();
+                let mut vd = Validator::new(&ctx);
                 vd.validate(tree)?;
                 for node in &mut *tree {
                     println!("{}", node.debug_string());
