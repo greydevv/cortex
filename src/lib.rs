@@ -1,3 +1,5 @@
+#![feature(map_try_insert)]
+
 pub mod symbols;
 pub mod io;
 pub mod lexer;

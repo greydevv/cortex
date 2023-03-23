@@ -1,3 +1,5 @@
+#![feature(map_try_insert)]
+
 use std::time::Instant;
 
 use colored::Colorize;
