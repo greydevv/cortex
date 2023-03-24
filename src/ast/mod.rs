@@ -63,6 +63,15 @@ impl Ident {
     pub fn span(&self) -> &FileSpan {
         &self.span
     }
+
+    pub fn pretty_ctx(&self) -> String {
+        match self.ctx {
+            IdentCtx::Def => "variable",
+            IdentCtx::FuncDef => "function",
+            IdentCtx::Param => "parameter",
+            _ => unimplemented!(),
+        }.to_string()
+    }
 }
 
 /// The AST node object.
