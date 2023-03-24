@@ -19,17 +19,6 @@ pub type Result<T = (), E = Box<CortexError>> = std::result::Result<T, E>;
 /// The main error object.
 #[derive(Debug)]
 pub struct CortexError(pub Vec<Diagnostic>);
-// pub enum CortexError {
-//     ArgError(String),
-//     SyntaxError {
-//         file_path: String,
-//         msg: String,
-//         span: FileSpan,
-//         help: Option<String>,
-//     },
-//     FileIOError(String),
-//     TypeError(String),
-// }
 
 /// Converts an error raised from [`clap`](https://docs.rs/clap/latest/clap/) to a standard Cortex
 /// error.
@@ -37,9 +26,6 @@ impl From<ClapError> for CortexError {
     fn from(value: ClapError) -> CortexError {
         let (kind, val) = value.context().nth(0).unwrap();
         match kind {
-            // ContextKind::InvalidArg => {
-            //     CortexError::ArgError(format!("invalid argument '{}'", val))
-            // }
             ContextKind::InvalidArg =>
                 Diagnostic::new(
                     format!("invalid argument '{}'", val),
@@ -71,12 +57,6 @@ impl CortexError {
             &ctx.fh,
             vec![(ctx.file_path().clone(), span)],
         ).into()
-        // CortexError::SyntaxError{
-        //     file_path: ctx.file_path(),
-        //     msg: String::from(msg),
-        //     span,
-        //     help,
-        // }
     }
 
     /// Creates a file I/O error.
@@ -85,7 +65,6 @@ impl CortexError {
             msg.to_string(),
             DiagnosticKind::Error,
         ).into()
-        // CortexError::FileIOError(String::from(msg))
     }
 
     /// Creates an error from an invalid integer literal.
@@ -96,12 +75,6 @@ impl CortexError {
             &ctx.fh,
             vec![(ctx.file_path().clone(), span)],
         ).into()
-        // CortexError::SyntaxError { 
-        //     file_path: ctx.file_path(),
-        //     msg: format!("'{}' is not a valid integer literal", lit),
-        //     span,
-        //     help: Some(String::from("Integer literals are expressed as a sequence of digits, e.g., \"23\" or \"921\"."))
-        // }
     }
 
     /// Creates an error when a binary operator was expected but one was not received.
@@ -112,12 +85,6 @@ impl CortexError {
             &ctx.fh,
             vec![(ctx.file_path().clone(), span)],
         ).into()
-        // CortexError::SyntaxError { 
-        //     file_path: ctx.file_path(),
-        //     msg: format!("'{}' is not a binary operator", lit),
-        //     span,
-        //     help: None,
-        // }
     }
 
     /// Creates an error describing an unclosed brace.
@@ -128,12 +95,6 @@ impl CortexError {
             &ctx.fh,
             vec![(ctx.file_path().clone(), tok.span)],
         ).into()
-        // CortexError::SyntaxError {
-        //     file_path: ctx.file_path(),
-        //     msg: format!("unclosed '{}'", tok.value()),
-        //     span: tok.span,
-        //     help: None
-        // }
     }
 
     /// Creates an error describing an unopened brace.
@@ -144,12 +105,6 @@ impl CortexError {
             &ctx.fh,
             vec![(ctx.file_path().clone(), tok.span)],
         ).into()
-        // CortexError::SyntaxError{
-        //     file_path: ctx.file_path(),
-        //     msg: format!("unopened '{}'", tok.value()),
-        //     span: tok.span,
-        //     help: None
-        // }
     }
 
     pub fn expected_but_got(ctx: &SessCtx, expected: &str, tok: &Token) -> CortexError {
@@ -210,16 +165,6 @@ impl CortexError {
         }
 
         CortexError(diags)
-        // CortexError::SyntaxError {
-        //     file_path: ctx.file_path(),
-        //     msg,
-        //     span: *ident.span(),
-        //     // TODO: Accept conflicting ident (if any) as a parameter and put it in the help. For
-        //     // example, if the variable 'sum' cannot be defined because it's a function defined
-        //     // elsewhere, the help should note the sum was previously defined as a function and
-        //     // underline it.
-        //     help,
-        // }
     }
 }
 
@@ -275,28 +220,6 @@ impl fmt::Display for CortexError {
     /// Generates the error output.
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         write!(f, "{}", ErrorFormatter::format(&self.0))
-        // let err_msg = match self {
-        //     CortexError::ArgError(msg) => msg,
-        //     CortexError::SyntaxError { msg, .. } => msg,
-        //     CortexError::FileIOError(msg) => msg,
-        //     CortexError::TypeError(msg) => msg,
-        // };
-        //
-        // write!(f, "{}: {}\n", "error".red().bold(), err_msg)?;
-        // match self {
-        //     CortexError::SyntaxError { ref file_path, ref span, ref help, .. } => {
-        //         let src = CortexError::underline(span, file_path);
-        //         match src {
-        //             Ok(src) =>
-        //                 match help {
-        //                     Some(help_msg) => write!(f, "{}\n{}", src, help_msg),
-        //                     None => write!(f, "{}", src),
-        //                 }
-        //             Err(_) => Ok(()),
-        //         }
-        //     },
-        //     _ => Ok(()),
-        // }
     }
 }
 
@@ -459,34 +382,3 @@ impl DiagnosticKind {
     //     }
     // }
 }
-
-// impl From<&CortexError> for Diagnostic {
-//     fn from(value: &CortexError) -> Diagnostic {
-        // match value {
-        //     CortexError::SyntaxError { file_path, msg, span, .. } => {
-        //         let spans = (
-        //             // TODO: fix unwrap
-        //             FileHandler::new(file_path.clone()).unwrap(),
-        //             vec![span.clone()],
-        //         );
-        //         Diagnostic::new_with_spans(
-        //             msg.clone(),
-        //             DiagnosticKind::Error,
-        //             spans,
-        //         )
-        //     },
-        //     _ => todo!(),
-        // }
-//     }
-// }
-
-
-
-
-
-
-
-
-
-
-
