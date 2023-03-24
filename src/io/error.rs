@@ -37,12 +37,14 @@ impl From<ClapError> for CortexError {
 }
 
 impl From<Diagnostic> for CortexError {
+    /// Creates an error from a single diagnostic.
     fn from(value: Diagnostic) -> CortexError {
         CortexError(vec![value])
     }
 }
 
 impl From<Vec<Diagnostic>> for CortexError {
+    /// Creates an error from multiple diagnostics.
     fn from(value: Vec<Diagnostic>) -> CortexError {
         CortexError(value)
     }
@@ -107,6 +109,7 @@ impl CortexError {
         ).into()
     }
 
+    /// Creates an error describing the case when an expectation of a token was not satisfied.
     pub fn expected_but_got(ctx: &SessCtx, expected: &str, tok: &Token) -> CortexError {
         let msg = format!(
             "expected {} but got '{}'",
@@ -168,52 +171,6 @@ impl CortexError {
     }
 }
 
-impl CortexError {
-    /// Generates a `String` with related info regarding the offending token(s) causing the error.
-    ///
-    /// The following snippet shows an example output generated from an error due to a reference to
-    /// an unknown variable.
-    ///
-    /// ```text
-    ///   at [5:1] in path/to/some_file.cx
-    ///   |
-    /// 5 | unknown_var = 10;
-    ///   | ^^^^^^^^^^^
-    /// ```
-    ///
-    /// The offending token is `unknown_var` and is underlined using multiple instances of the `'^'`
-    /// character. Pertinent information is included above the offending source code, such as the
-    /// filename (in this case, `path/to/some_file.cx`) and the location at which the error
-    /// happend, formatted as `[line:col]` (in this case, `[5:1]`).
-    ///
-    /// Note that the error message itself is not included in this output as some errors are not
-    /// associated with a piece of source code, e.g., an error raised for invalid compilation
-    /// arguments via the CLI.
-    ///
-    pub fn underline(span: &FileSpan, file_path: &String) -> Result<String> {
-        let fh = FileHandler::new(file_path.clone())?;
-        let mut lines = fh.contents().lines();
-        let line_nr = span.beg.line.to_string();
-        let indent = " ".repeat(line_nr.len() + 1);
-        // TODO: Put identifiers in below format to make it easier to read.
-        Ok(format!(
-            "{}{} [{}:{}] {} {}\n{}|\n{} | {}\n{}| {}{}",
-            indent,
-            "at".bold(),
-            span.beg.line,
-            span.beg.col,
-            "in".bold(),
-            file_path,
-            indent,
-            line_nr.bold(),
-            lines.nth(span.beg.line - 1).unwrap_or_else(|| ""),
-            indent,
-            " ".repeat(span.beg.col - 1),
-            "^".repeat(span.len()).red().bold(),
-        ))
-    }
-}
-
 impl Error for CortexError {}
 
 impl fmt::Display for CortexError {
@@ -242,6 +199,7 @@ impl ErrorFormatter {
 }
 
 impl fmt::Display for Diagnostic {
+    /// Formats the diagnostic into a string ready for output to console.
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         write!(
             f, "{}{} {}",
@@ -258,12 +216,15 @@ impl fmt::Display for Diagnostic {
 }
 
 /// The various kinds of diagnostics.
-#[derive(Debug, strum_macros::Display)]
+#[derive(PartialEq, Debug, strum_macros::Display)]
 pub enum DiagnosticKind {
+    /// An error.
     #[strum(serialize="error")]
     Error,
+    /// A help message, such as a suggestion.
     #[strum(serialize="help")]
     Help,
+    /// A general warning.
     #[strum(serialize="warning")]
     Warn,
 }
@@ -280,6 +241,7 @@ pub struct Diagnostic {
 
 
 impl Diagnostic {
+    /// Creates a new diagnostic with no associated source code.
     pub fn new(msg: String, kind: DiagnosticKind) -> Diagnostic {
         Diagnostic {
             msg,
@@ -288,9 +250,16 @@ impl Diagnostic {
         }
     }
 
+    /// Creates a new diagnostic with associated source code.
     pub fn new_with_spans(msg: String, kind: DiagnosticKind, fh: &FileHandler, spans: Vec<(String, FileSpan)>) -> Diagnostic {
         let mut spans_assoc = Vec::new();
         for (file_path, span) in spans {
+            // TODO: Need to be careful here. Use of lines.nth in the format macro will consume
+            // this iterator. This means that if the same line of source code is included in
+            // another diagnostic, then it will show up as a blank line. Eventually, will need
+            // to rethink this and find an alternative solution for the unwrap_or_else(|| "")
+            // call. This seems inefficient to call contents().lines() every loop. In either case,
+            // need to take a look at this.
             let line = fh.contents().lines().nth(span.beg.line-1).unwrap_or_else(|| "");
             spans_assoc.push((file_path, line.to_string(), span));
         }
@@ -301,15 +270,29 @@ impl Diagnostic {
         }
     }
 
+    /// Generates a `String` with related info regarding the offending token(s) causing the error.
+    ///
+    /// The following snippet shows an example output generated from an error due to a reference to
+    /// an unknown variable.
+    ///
+    /// ```text
+    ///   at [5:1] in path/to/some_file.cx
+    ///   |
+    /// 5 | lucky_num = 13;
+    ///   | ^^^^^^^^^
+    /// ```
+    ///
+    /// The offending token is `lucky_num` and is underlined using multiple instances of the `'^'`
+    /// character. Pertinent information is included above the offending source code, such as the
+    /// filename (in this case, `path/to/some_file.cx`) and the location at which the error
+    /// happend, formatted as `[line:col]` (in this case, `[5:1]`).
+    ///
+    /// Note that the error message itself is not included in this output as some errors are not
+    /// associated with a piece of source code, e.g., an error resulting from invalid CLI
+    /// arguments.
     fn get_source_string(&self) -> Option<String> {
         match self.spans {
             Some(ref spans) => {
-                // TODO: Need to be careful here. Use of lines.nth in the format macro will consume
-                // this iterator. This means that if the same line of source code is included in
-                // another diagnostic, then it will show up as a blank line. Eventually, will need
-                // to rethink this and find an alternative solution for the unwrap_or_else(|| "")
-                // call.
-                // let mut lines = fh.contents().lines();
                 let mut sources = Vec::new();
                 for (file_path, line, span) in spans {
                     let line_nr = span.beg.line.to_string();
@@ -326,11 +309,9 @@ impl Diagnostic {
                         span.beg.col,
                         "in".bold(),
                         file_path,
-                        // fh.file_path(),
                         indent,
                         line_nr.bold(),
                         line,
-                        // lines.nth(span.beg.line - 1).unwrap_or_else(|| ""),
                         indent,
                         " ".repeat(span.beg.col - 1),
                         underline,
@@ -364,7 +345,16 @@ impl DiagnosticKind {
         }
     }
 
-    /// Returns the character that composes the physical underline in diagnostic outputs.
+    /// Returns the character that composes the underline(s) in diagnostic outputs.
+    ///
+    /// # Examples
+    ///
+    /// If the character is "~", and we wish to underline `some_string`, the output looks something
+    /// like:
+    /// ```text
+    /// some_string
+    /// ~~~~~~~~~~~
+    /// ```
     pub fn underline_char(&self) -> String {
         // all same characters for now
         match self {
