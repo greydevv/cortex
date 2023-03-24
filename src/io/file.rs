@@ -5,10 +5,15 @@ use std::io::{ Read, ErrorKind };
 use std::fmt;
 
 use crate::symbols::Len;
-use crate::io::error::{ CortexError, Result };
+use crate::io::error::{
+    Result,
+    CortexError,
+    Diagnostic,
+    DiagnosticKind,
+};
 
 /// The object representing a source file.
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct FileHandler {
     file_path: String,
     src: String,
@@ -39,7 +44,10 @@ impl FileHandler {
             ErrorKind::InvalidData => format!("contents of '{file_path}' are not valid UTF-8"),
             _ => format!("could not read '{file_path}'"),
         };
-        CortexError::FileIOError(err_msg)
+        Diagnostic::new(
+            err_msg,
+            DiagnosticKind::Error,
+        ).into()
     }
 
     /// Gets the file path.

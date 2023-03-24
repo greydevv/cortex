@@ -1,6 +1,11 @@
 //! The main parsing interface.
 
-use crate::io::error::{ Result, CortexError };
+use crate::io::error::{
+    Result,
+    CortexError,
+    Diagnostic,
+    DiagnosticKind
+};
 use crate::lexer::Lexer;
 use crate::ast::{
     AstNode,
@@ -66,12 +71,17 @@ impl<'a> Parser<'_> {
                 };
                 tree.push(Box::new(child));
             } else {
-                return Err(CortexError::SyntaxError {
-                    file_path: self.ctx.file_path(),
-                    msg: format!("expected keyword but got '{}'", self.tok.value()),
-                    span: self.tok.span,
-                    help: None,
-                }.into());
+                return Err(CortexError::expected_but_got(
+                    &self.ctx,
+                    "keyword",
+                    &self.tok,
+                ).into());
+                // return Err(CortexError::SyntaxError {
+                //     file_path: self.ctx.file_path(),
+                //     msg: format!("expected keyword but got '{}'", self.tok.value()),
+                //     span: self.tok.span,
+                //     help: None,
+                // }.into());
             }
         }
         Ok(tree)
@@ -112,12 +122,17 @@ impl<'a> Parser<'_> {
             self.eat(TokenKind::Delim(DelimKind::Scolon))?;
             Ok(incl)
         } else {
-            Err(CortexError::SyntaxError {
-                file_path: self.ctx.file_path(),
-                msg: format!("expected string literal but got '{}'", self.tok.value()),
-                span: self.tok.span,
-                help: None,
-            }.into())
+            Err(CortexError::expected_but_got(
+                &self.ctx,
+                "string literal",
+                &self.tok
+            ).into())
+            // Err(CortexError::SyntaxError {
+            //     file_path: self.ctx.file_path(),
+            //     msg: format!("expected string literal but got '{}'", self.tok.value()),
+            //     span: self.tok.span,
+            //     help: None,
+            // }.into())
         }
     }
 
@@ -143,12 +158,23 @@ impl<'a> Parser<'_> {
                     TokenKind::Kwd(KwdKind::If) => ("else if", self.prev_tok.span.to(self.tok.span)),
                     _ => ("else", self.prev_tok.span),
                 };
-                return Err(CortexError::SyntaxError {
-                    file_path: self.ctx.file_path(),
-                    msg: format!("found '{}' without a preceding 'if' statement", kind),
-                    span,
-                    help: None,
-                }.into());
+
+                return Err(CortexError(
+                    vec![
+                        Diagnostic::new_with_spans(
+                            format!("found '{}' without a preceding 'if' statement", kind),
+                            DiagnosticKind::Error,
+                            &self.ctx.fh,
+                            vec![(self.ctx.file_path(), span)],
+                        )
+                    ]
+                ).into())
+                // return Err(CortexError::SyntaxError {
+                //     file_path: self.ctx.file_path(),
+                //     msg: format!("found '{}' without a preceding 'if' statement", kind),
+                //     span,
+                //     help: None,
+                // }.into());
             }
             KwdKind::While => self.parse_while()?,
             KwdKind::For => unimplemented!("parsing of for loop"),
@@ -171,12 +197,20 @@ impl<'a> Parser<'_> {
         self.advance()?; // skip 'if' kwd
         match self.tok.kind {
             TokenKind::BraceOpen(BraceKind::Curly) =>
-                return Err(CortexError::SyntaxError {
-                    file_path: self.ctx.file_path(),
-                    msg: String::from("expected expression"),
-                    span: self.tok.span,
-                    help: None,
-                }.into()),
+                return Err(CortexError(
+                    vec![
+                        Diagnostic::new(
+                            String::from("expected expression"),
+                            DiagnosticKind::Error,
+                        )
+                    ]
+                ).into()),
+                // return Err(CortexError::SyntaxError {
+                //     file_path: self.ctx.file_path(),
+                //     msg: String::from("expected expression"),
+                //     span: self.tok.span,
+                //     help: None,
+                // }.into()),
             _ => (),
         }
         let expr = self.parse_expr()?;
@@ -205,12 +239,17 @@ impl<'a> Parser<'_> {
                         )
                     },
                     _ =>
-                        return Err(CortexError::SyntaxError {
-                            file_path: self.ctx.file_path(),
-                            msg: format!("expected else body but got '{}'", self.tok.value()),
-                            span: self.tok.span,
-                            help: None
-                        }.into())
+                        return Err(CortexError::expected_but_got(
+                            &self.ctx,
+                            "else body",
+                            &self.tok,
+                        ).into()),
+                        // return Err(CortexError::SyntaxError {
+                        //     file_path: self.ctx.file_path(),
+                        //     msg: format!("expected else body but got '{}'", self.tok.value()),
+                        //     span: self.tok.span,
+                        //     help: None
+                        // }.into())
                 }
             },
             _ => CondKind::If(Box::new(expr), Box::new(body), None),
@@ -227,12 +266,17 @@ impl<'a> Parser<'_> {
             self.advance()?; // skip type
             Ok(Ident::new(&ident, ty_kind, with_ident_ctx, ident_span))
         } else {
-            Err(CortexError::SyntaxError {
-                file_path: self.ctx.file_path(),
-                msg: format!("expected type but got '{}'", self.tok.value()),
-                span: self.tok.span,
-                help: None,
-            }.into())
+            Err(CortexError::expected_but_got(
+                &self.ctx,
+                "type",
+                &self.tok,
+            ).into())
+            // Err(CortexError::SyntaxError {
+            //     file_path: self.ctx.file_path(),
+            //     msg: format!("expected type but got '{}'", self.tok.value()),
+            //     span: self.tok.span,
+            //     help: None,
+            // }.into())
         }
     }
 
@@ -261,12 +305,17 @@ impl<'a> Parser<'_> {
                     ))
                 },
                 _ =>
-                    Err(CortexError::SyntaxError {
-                        file_path: self.ctx.file_path(),
-                        msg: format!("expected type annotation or equals sign but got '{}'", peek_tok.value()),
-                        span: peek_tok.span,
-                        help: None,
-                    }.into())
+                    Err(CortexError::expected_but_got(
+                        &self.ctx,
+                        "type annotation or equals sign",
+                        &peek_tok,
+                    ).into()),
+                    // Err(CortexError::SyntaxError {
+                    //     file_path: self.ctx.file_path(),
+                    //     msg: format!("expected type annotation or equals sign but got '{}'", peek_tok.value()),
+                    //     span: peek_tok.span,
+                    //     help: None,
+                    // }.into())
             }
         })?;
         self.eat(TokenKind::BinOp(BinOpKind::Eql))?;
@@ -306,12 +355,17 @@ impl<'a> Parser<'_> {
                 TyKind::Void
             },
             _ =>
-                return Err(CortexError::SyntaxError {
-                    file_path: self.ctx.file_path(),
-                    msg: format!("expected a return-type annotation or the beginning of a function body but got '{}'", self.tok.value()),
-                    span: self.tok.span,
-                    help: None,
-                }.into())
+                return Err(CortexError::expected_but_got(
+                    &self.ctx,
+                    "return-type annotation or function body",
+                    &self.tok,
+                ).into()),
+                // return Err(CortexError::SyntaxError {
+                //     file_path: self.ctx.file_path(),
+                //     msg: format!("expected a return-type annotation or the beginning of a function body but got '{}'", self.tok.value()),
+                //     span: self.tok.span,
+                //     help: None,
+                // }.into())
         };
         let body = self.parse_compound()?;
         let node = Func::new(
@@ -351,12 +405,17 @@ impl<'a> Parser<'_> {
                 return Ok(expr);
             },
             _ =>
-                return Err(CortexError::SyntaxError {
-                    file_path: self.ctx.file_path(),
-                    msg: format!("expected operand but got '{}'", self.tok.value()),
-                    span: self.tok.span,
-                    help: None,
-                }.into())
+                return Err(CortexError::expected_but_got(
+                    &self.ctx,
+                    "operand",
+                    &self.tok,
+                ).into()),
+                // return Err(CortexError::SyntaxError {
+                //     file_path: self.ctx.file_path(),
+                //     msg: format!("expected operand but got '{}'", self.tok.value()),
+                //     span: self.tok.span,
+                //     help: None,
+                // }.into())
         };
         self.advance()?;
         Ok(node)
@@ -460,12 +519,15 @@ impl<'a> Parser<'_> {
     fn expect_id(&mut self, with_msg: String) -> Result<String> {
         let result = match &self.tok.kind {
             TokenKind::Id(ident) => Ok(ident.to_owned()),
-            _ => Err(CortexError::SyntaxError {
-                file_path: self.ctx.file_path(),
-                msg: with_msg,
-                span: self.tok.span,
-                help: None,
-            }.into())
+            _ => Err(CortexError(
+                    vec![
+                        Diagnostic::new(
+                            with_msg,
+                            DiagnosticKind::Error,
+                            // self.tok.span,
+                        )
+                    ]
+                ).into())
         };
         self.advance()?;
         result
@@ -475,12 +537,18 @@ impl<'a> Parser<'_> {
     fn expect_ty(&mut self) -> Result<TyKind> {
         let result = match &self.tok.kind {
             TokenKind::Ty(ty_kind) => Ok(ty_kind.to_owned()),
-            _ => Err(CortexError::SyntaxError {
-                file_path: self.ctx.file_path(),
-                msg: format!("expected type but got '{}' instead", self.tok.value()),
-                span: self.tok.span,
-                help: None,
-            }.into())
+            _ => 
+                Err(CortexError::expected_but_got(
+                    &self.ctx,
+                    "type",
+                    &self.tok,
+                ).into()),
+                // Err(CortexError::SyntaxError {
+                //     file_path: self.ctx.file_path(),
+                //     msg: format!("expected type but got '{}' instead", self.tok.value()),
+                //     span: self.tok.span,
+                //     help: None,
+                // }.into())
         };
         self.advance()?;
         result
@@ -495,12 +563,17 @@ impl<'a> Parser<'_> {
             _ => self.tok.kind == expected_kind
         };
         if !tok_expected {
-            return Err(CortexError::SyntaxError { 
-                file_path: self.ctx.file_path(),
-                msg: format!("expected '{}' but got '{}'", expected_kind.literal(), self.tok.value()),
-                span: self.tok.span,
-                help: None,
-            }.into());
+            return Err(CortexError::expected_but_got(
+                &self.ctx,
+                format!("'{}'", expected_kind.literal()).as_str(),
+                &self.tok,
+            ).into());
+            // return Err(CortexError::SyntaxError { 
+            //     file_path: self.ctx.file_path(),
+            //     msg: format!("expected '{}' but got '{}'", expected_kind.literal(), self.tok.value()),
+            //     span: self.tok.span,
+            //     help: None,
+            // }.into());
         }
         self.advance()?;
         Ok(())

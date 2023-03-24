@@ -1,7 +1,12 @@
 use std::fmt;
 
 use crate::symbols::{ Literal, MaybeFrom };
-use crate::io::error::{ Result, CortexError };
+use crate::io::error::{
+    Result,
+    CortexError,
+    Diagnostic,
+    DiagnosticKind,
+};
 
 #[derive(PartialEq, Clone, Copy, Debug)]
 pub enum TyKind {
@@ -18,8 +23,14 @@ impl TyKind {
         if *self == *other {
             Ok(())
         } else {
-            Err(CortexError::TypeError(
-                format!("expected type '{}' but got type '{}'", *self, *other)
+            Err(CortexError(
+                vec![
+                    Diagnostic::new(
+                        format!("expected type '{}' but got type '{}'", *self, *other),
+                        DiagnosticKind::Error,
+                        // some span needed here
+                    )
+                ]
             ).into())
         }
     }

@@ -230,11 +230,16 @@ impl<'a> Validator<'_> {
             IdentCtx::Def
                 | IdentCtx::Param
                 | IdentCtx::FuncDef =>
+                    match ident.ty_kind {
+                        TyKind::Infer => todo!("TYPE INFERENCE!"),
+                        _ =>
+                            match self.symb_tab.try_insert(ident) {
+                                Some(ref conflict) =>
+                                    Err(CortexError::illegal_ident(&self.ctx, &ident, Some(conflict)).into()),
+                                None => Ok(ident.ty_kind),
+                            },
+                    }
                     // format error based on context (param, func, variable)
-                    match self.symb_tab.try_insert(ident) {
-                        Some(_) => Err(CortexError::illegal_ident(&self.ctx, &ident).into()),
-                        None => Ok(ident.ty_kind),
-                    },
             IdentCtx::Ref
                 | IdentCtx::FuncCall =>
                     match self.symb_tab.try_query(ident) {
@@ -242,7 +247,8 @@ impl<'a> Validator<'_> {
                             ident.update_ty(def_ident.ty_kind);
                             Ok(ident.ty_kind)
                         },
-                        None => Err(CortexError::illegal_ident(&self.ctx, &ident).into()),                    },
+                        None => Err(CortexError::illegal_ident(&self.ctx, &ident, None).into()),
+                    },
         }
     } 
 
