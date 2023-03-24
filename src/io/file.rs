@@ -164,17 +164,25 @@ mod tests {
     use super::*;
 
     #[test]
-    fn open_file() -> Result {
+    fn open_existing_file() -> Result {
         let _result = FileHandler::new(String::from("samples/debug.cx"))?;
         Ok(())
     }
 
     #[test]
     fn open_nonexistent_file() {
+        let expected_diags = vec![
+            Diagnostic::new(
+                "'iamsomenonexistentfile' does not exist".to_string(),
+                DiagnosticKind::Error,
+            )
+        ];
         let result = FileHandler::new(String::from("iamsomenonexistentfile"));
-        let expected = CortexError::FileIOError(format!("'iamsomenonexistentfile' does not exist"));
-
         assert!(result.is_err());
-        assert_eq!(*(result.err()).unwrap(), expected);
+        let CortexError(diags) = *result.err().unwrap();
+        assert!(diags.len() == expected_diags.len());
+        diags.iter()
+            .zip(&expected_diags)
+            .for_each(|(diag, expected_diag)| assert!(diag == expected_diag))
     }
 }

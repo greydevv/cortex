@@ -329,6 +329,12 @@ impl<'a> Lexer<'_> {
 mod tests {
     use super::*;
     use crate::io::file::FileHandler;
+    use crate::io::error::{
+        Result,
+        CortexError,
+        Diagnostic,
+        DiagnosticKind,
+    };
 
     #[test]
     fn empty_file() -> Result {
@@ -406,16 +412,24 @@ mod tests {
         let ctx = SessCtx::new(FileHandler::pseudo_fh(src));
         let mut lexer = Lexer::new(&ctx);
 
+        let expected_diags = vec![
+            Diagnostic::new_with_spans(
+                "unterminated string literal".to_string(),
+                DiagnosticKind::Error,
+                &ctx.fh,
+                vec![
+                    (ctx.file_path(), FileSpan::new(FilePos::new(1, 1), FilePos::new(1, 15))),
+                ],
+            )
+        ];
         let result = lexer.next_token();
-        let expected = CortexError::syntax_err(
-            &ctx,
-            "unterminated string literal",
-            FileSpan::new(FilePos::new(1, 1), FilePos::new(1, 15)),
-            None,
-        );
 
         assert!(result.is_err());
-        assert_eq!(*(result.err()).unwrap(), expected);
+        let CortexError(diags) = *result.err().unwrap();
+        assert!(diags.len() == expected_diags.len());
+        diags.iter()
+            .zip(&expected_diags)
+            .for_each(|(diag, expected_diag)| assert!(diag == expected_diag))
     }
 
     #[test]
@@ -464,16 +478,24 @@ mod tests {
             assert!(lexer.next_token().is_ok());
         }
 
-        let expected = CortexError::syntax_err(
-            &ctx,
-            "unclosed '{'",
-            FileSpan::one(FilePos::new(2, 1)),
-            None,
-        );
+        let expected_diags = vec![
+            Diagnostic::new_with_spans(
+                "unclosed '{'".to_string(),
+                DiagnosticKind::Error,
+                &ctx.fh,
+                vec![
+                    (ctx.file_path(), FileSpan::one(FilePos::new(2, 1))),
+                ],
+            )
+        ];
         let result = lexer.next_token();
 
         assert!(result.is_err());
-        assert_eq!(*(result.err()).unwrap(), expected);
+        let CortexError(diags) = *result.err().unwrap();
+        assert!(diags.len() == expected_diags.len());
+        diags.iter()
+            .zip(&expected_diags)
+            .for_each(|(diag, expected_diag)| assert!(diag == expected_diag))
     }
 
     #[test]
@@ -485,16 +507,24 @@ mod tests {
         // no need to loop, first next_token is only call that should succeed
         assert!(lexer.next_token().is_ok());
 
-        let expected = CortexError::syntax_err(
-            &ctx,
-            "unopened '}'",
-            FileSpan::one(FilePos::new(2, 1)),
-            None,
-        );
+        let expected_diags = vec![
+            Diagnostic::new_with_spans(
+                "unopened '}'".to_string(),
+                DiagnosticKind::Error,
+                &ctx.fh,
+                vec![
+                    (ctx.file_path(), FileSpan::one(FilePos::new(2, 1))),
+                ],
+            )
+        ];
         let result = lexer.next_token();
 
         assert!(result.is_err());
-        assert_eq!(*(result.err()).unwrap(), expected);
+        let CortexError(diags) = *result.err().unwrap();
+        assert!(diags.len() == expected_diags.len());
+        diags.iter()
+            .zip(&expected_diags)
+            .for_each(|(diag, expected_diag)| assert!(diag == expected_diag))
     }
 
     #[test]

@@ -229,7 +229,7 @@ pub enum DiagnosticKind {
     Warn,
 }
 
-#[derive(Debug)]
+#[derive(PartialEq, Debug)]
 pub struct Diagnostic {
     /// The diagnostic's message.
     msg: String,
