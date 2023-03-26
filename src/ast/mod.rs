@@ -237,11 +237,11 @@ impl AstDebug for Expr {
                             "({}: {})\n{}",
                             ident.raw(),
                             ident.ty_kind(),
-                            expr.debug(indents+1),
+                            expr.debug(indents+2),
                         ),
                     _ => unimplemented!()
                 };
-                format!("{}{}", stmt_kind, stmt_string)
+                format!("\n{}{}{}", "  ".repeat(indents+1), stmt_kind, stmt_string)
             },
             ExprKind::Binary(bin_op_kind, lhs, rhs) =>
                 format!(
