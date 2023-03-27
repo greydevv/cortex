@@ -10,7 +10,8 @@ use crate::io::error::{
 
 #[derive(PartialEq, Clone, Copy, Debug)]
 pub enum TyKind {
-    Int(usize),
+    // UInt(IntSize),
+    Int(IntSize),
     Bool,
     Str,
     Void,
@@ -45,7 +46,7 @@ impl fmt::Display for TyKind {
 impl Literal for TyKind {
     fn literal(&self) -> String {
         match &self {
-            TyKind::Int(size) => format!("i{}", size),
+            TyKind::Int(size) => format!("i{}", *size as u32),
             TyKind::Bool => format!("bool"),
             TyKind::Str => format!("str"),
             TyKind::Void => String::from("void"),
@@ -58,8 +59,28 @@ impl Literal for TyKind {
 impl MaybeFrom<String> for TyKind {
     fn maybe_from(value: &String) -> Option<TyKind> {
         match value.as_str() {
-            "i32" => Some(TyKind::Int(32)),
+            // "i8" => Some(TyKind::Int(IntSize::N8)),
+            // "i16" => Some(TyKind::Int(IntSize::N16)),
+            "i32" => Some(TyKind::Int(IntSize::N32)),
+            // "i64" => Some(TyKind::Int(IntSize::N64)),
+            // "i128" => Some(TyKind::Int(IntSize::N128)),
             _ => None,
         }
+    }
+}
+
+#[derive(PartialEq, Clone, Copy, Debug)]
+pub enum IntSize {
+    N8 = 8,
+    N16 = 16,
+    N32 = 32,
+    N64 = 64,
+    N128 = 128,
+}
+
+
+impl Literal for IntSize {
+    fn literal(&self) -> String {
+        (*self as u32).to_string()
     }
 }

@@ -5,7 +5,7 @@ use std::collections::{
     VecDeque
 };
 
-use crate::symbols::{ TyKind, BinOpKind, UnaryOpKind };
+use crate::symbols::{ TyKind, IntSize, BinOpKind, UnaryOpKind };
 use crate::io::error::Result;
 use crate::ast::{
     AstNode,
@@ -165,7 +165,6 @@ impl<'a> Validator<'_> {
             ExprKind::Binary(ref op_kind, ref mut lhs, ref mut rhs) => {
                 let lhs_ty = self.validate_expr(lhs)?;
                 let rhs_ty = self.validate_expr(rhs)?;
-                // TODO: Need to do anything with operator associativity?
                 self.validate_bin_op(op_kind, &lhs_ty, &rhs_ty)
             }
             ExprKind::Stmt(ref mut stmt_kind) => self.validate_stmt(stmt_kind),
@@ -256,7 +255,7 @@ impl<'a> Validator<'_> {
     fn validate_lit(&self, lit: &LitKind) -> TyKind {
         match lit {
             // TODO: Use 'n' in 'Num(n)' to determine size of type
-            LitKind::Num(_) => TyKind::Int(32),
+            LitKind::Num(_) => TyKind::Int(IntSize::N32),
             LitKind::Str(_) => TyKind::Str,
         }
     }
@@ -271,7 +270,7 @@ impl<'a> Validator<'_> {
     fn validate_unary_op(&self, unary_op_kind: &UnaryOpKind, expr_ty: &TyKind) -> Result<TyKind> {
         let op_ty = match unary_op_kind {
             UnaryOpKind::Not => TyKind::Bool,
-            UnaryOpKind::Neg => TyKind::Int(32),
+            UnaryOpKind::Neg => TyKind::Int(IntSize::N32),
         };
         op_ty.compat(expr_ty)
             .and_then(|_| Ok(op_ty))
@@ -290,7 +289,7 @@ impl<'a> Validator<'_> {
             BinOpKind::Add
                 | BinOpKind::Sub
                 | BinOpKind::Mul
-                | BinOpKind::Div => TyKind::Int(32),
+                | BinOpKind::Div => TyKind::Int(IntSize::N32),
         };
         Ok(op_ty)
     }
