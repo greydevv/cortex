@@ -13,7 +13,6 @@ use crate::ast::{
     Expr,
     Ident,
     ExprKind,
-    LitKind,
     StmtKind,
     IdentCtx,
     CondKind,
@@ -22,6 +21,7 @@ use crate::symbols::{
     Token,
     TokenKind,
     BinOpKind,
+    LitKind,
     UnaryOpKind,
     OpAssoc,
     TyKind,
@@ -88,7 +88,7 @@ impl<'a> Parser<'_> {
         self.eat(TokenKind::BraceOpen(BraceKind::Curly))?;
         loop {
             let child = match self.tok.kind.clone() {
-                TokenKind::Id(_) | TokenKind::Num(_) => {
+                TokenKind::Id(_) | TokenKind::Lit(_) => {
                     let expr = self.parse_expr()?;
                     self.eat(TokenKind::Delim(DelimKind::Scolon))?;
                     AstNode::Expr(expr)
@@ -108,7 +108,7 @@ impl<'a> Parser<'_> {
     /// Parses an include statement, e.g., `include "some_file.cx"`.
     fn parse_include(&mut self) -> Result<Expr> {
         self.advance()?; // skip 'include' kwd
-        if let TokenKind::String(_) = self.tok.kind {
+        if let TokenKind::Lit(LitKind::Str(_)) = self.tok.kind {
             let incl = Expr::new(ExprKind::Stmt(
                 StmtKind::Incl(self.tok.value())
             ));
@@ -331,7 +331,7 @@ impl<'a> Parser<'_> {
     /// Parses a term in an expression, i.e., a variable, literal, function call, etc..
     fn parse_term(&mut self) -> Result<Expr> {
         let node = match self.tok.kind.clone() {
-            TokenKind::Num(n) => Expr::new(ExprKind::Lit(LitKind::Num(n))),
+            TokenKind::Lit(lit_kind) => Expr::new(ExprKind::Lit(lit_kind)),
             TokenKind::BinOp(BinOpKind::Sub) => {
                 // treat this as a unary operation
                 self.advance()?; // skip operator
@@ -498,8 +498,6 @@ impl<'a> Parser<'_> {
     /// token does not match the expected one.
     fn eat(&mut self, expected_kind: TokenKind) -> Result {
         let tok_expected = match (&self.tok.kind, &expected_kind) {
-            (TokenKind::Num(_), TokenKind::Num(_)) => true,
-            (TokenKind::Id(_), TokenKind::Id(_)) => true,
             _ => self.tok.kind == expected_kind
         };
         if !tok_expected {

@@ -78,12 +78,14 @@ impl fmt::Display for Token {
 /// Different possible kinds of [`Token`].
 #[derive(PartialEq, Debug, Clone, strum_macros::Display)]
 pub enum TokenKind {
+    /// Literals (numeric, string, boolean, etc.)
+    Lit(LitKind),
     /// Numeric literals
-    Num(i32),
+    // Num(i32),
     /// Identifiers
     Id(String),
     /// String literals
-    String(String),
+    // String(String),
     /// Right-facing arrow (denoting return types)
     Arrow,
     /// Delimiters (punctuation excluding braces)
@@ -114,9 +116,8 @@ impl Literal for TokenKind {
     /// ```
     fn literal(&self) -> String {
         match self {
-            TokenKind::Num(n) => n.to_string(),
+            TokenKind::Lit(lit_kind) => lit_kind.literal(),
             TokenKind::Id(s) => s.clone(),
-            TokenKind::String(s) => s.clone(),
             TokenKind::Arrow => String::from("->"),
             TokenKind::Delim(delim_kind) => delim_kind.literal(),
             TokenKind::BraceOpen(brace_kind) =>
@@ -148,6 +149,31 @@ impl Len for TokenKind {
     }
 }
 
+impl Literal for LitKind {
+    /// # Examples
+    /// ```
+    /// let lit_kind = LitKind::Num(13);
+    /// lit_kind.literal() // "13"
+    /// ```
+    fn literal(&self) -> String {
+        match self {
+            LitKind::Num(n) => n.to_string(),
+            LitKind::Str(s) => s.clone(),
+            LitKind::Bool(v) => v.to_string(),
+        }
+    }
+}
+
+/// The various kinds of literals.
+#[derive(PartialEq, Clone, Debug, strum_macros::Display)]
+pub enum LitKind {
+    /// Numeric literals, e.g., `4` and `0.14`.
+    Num(i32), // just i32 for now
+    /// String literals, e.g., `"Hello, Cortex!"`.
+    Str(String),
+    /// Boolean literals, i.e., `true` and `false`.
+    Bool(bool),
+}
 
 #[cfg(test)]
 mod tests {

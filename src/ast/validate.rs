@@ -258,6 +258,7 @@ impl<'a> Validator<'_> {
             // TODO: Use 'n' in 'Num(n)' to determine size of type
             LitKind::Num(_) => TyKind::Int(IntSize::N32),
             LitKind::Str(_) => TyKind::Str,
+            LitKind::Bool(_) => TyKind::Bool,
         }
     }
 

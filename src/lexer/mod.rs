@@ -9,6 +9,7 @@ use crate::symbols::{
     Token,
     TokenKind,
     TyKind,
+    LitKind,
     DelimKind,
     BraceKind,
     BinOpKind,
@@ -136,9 +137,16 @@ impl<'a> Lexer<'_> {
             self.next_char();
         }
 
-        // return a keyword token if the string was found to be a built-in keyword
         let span = FileSpan::new(beg_pos, self.pos);
-        if let Some(kwd_kind) = KwdKind::maybe_from(&val) {
+
+        // attempt to coerce the lexeme to built-in literals, keywords, and types
+        if let Some(bool_val) = match val.as_str() {
+                "true" => Some(true),
+                "false" => Some(false),
+                _ => None,
+        } {
+            return Token::new(TokenKind::Lit(LitKind::Bool(bool_val)), span);
+        } else if let Some(kwd_kind) = KwdKind::maybe_from(&val) {
             return Token::new(TokenKind::Kwd(kwd_kind), span);
         } else if let Some(ty_kind) = TyKind::maybe_from(&val) {
             return Token::new(TokenKind::Ty(ty_kind), span);
@@ -172,7 +180,7 @@ impl<'a> Lexer<'_> {
         }
         let span = FileSpan::new(beg_pos, self.pos);
         match val.parse::<i32>() {
-            Ok(n) => Ok(Token::new(TokenKind::Num(n), span)),
+            Ok(n) => Ok(Token::new(TokenKind::Lit(LitKind::Num(n)), span)),
             Err(_) => Err(CortexError::invalid_integer_literal(self.ctx, &val, span).into())
         }
     }
@@ -284,7 +292,7 @@ impl<'a> Lexer<'_> {
                     self.next_char();
                     let span = FileSpan::new(beg_pos, self.pos);
                     return Ok(Token::new(
-                        TokenKind::String(val),
+                        TokenKind::Lit(LitKind::Str(val)),
                         span,
                     ));
                 },
@@ -536,7 +544,7 @@ mod tests {
         let expected_toks = vec![
             // treat unary operator as a binary operator at first
             Token::new(TokenKind::BinOp(BinOpKind::Sub), FileSpan::one(FilePos::new(1, 1))),
-            Token::new(TokenKind::Num(13), FileSpan::new(FilePos::new(1, 2), FilePos::new(1, 4))),
+            Token::new(TokenKind::Lit(LitKind::Num(13)), FileSpan::new(FilePos::new(1, 2), FilePos::new(1, 4))),
         ];
 
         for expected in expected_toks {

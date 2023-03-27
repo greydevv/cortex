@@ -68,6 +68,7 @@ impl MaybeFrom<String> for TyKind {
             "i32" => Some(TyKind::Int(IntSize::N32)),
             "i64" => Some(TyKind::Int(IntSize::N64)),
             "i128" => Some(TyKind::Int(IntSize::N128)),
+            "bool" => Some(TyKind::Bool),
             _ => None,
         }
     }

@@ -1,6 +1,11 @@
 //! The AST objects and validator.
 
-use crate::symbols::{ TyKind, BinOpKind, UnaryOpKind };
+use crate::symbols::{
+    TyKind,
+    LitKind,
+    BinOpKind,
+    UnaryOpKind
+};
 use crate::io::file::FileSpan;
 
 pub mod validate;
@@ -145,15 +150,6 @@ pub enum CondKind {
     While(Box<Expr>, Box<Expr>),
 }
 
-/// The various kinds of literals.
-#[derive(Clone, strum_macros::Display)]
-pub enum LitKind {
-    /// Numeric literals, e.g., `4` and `0.14`.
-    Num(i32), // just i32 for now
-    /// String literals, e.g., `"Hello, Cortex!"`.
-    Str(String),
-}
-
 /// The various kinds of statements.
 #[derive(Clone, strum_macros::Display)]
 pub enum StmtKind {
@@ -260,6 +256,7 @@ impl AstDebug for Expr {
                 let lit_string = match lit_kind {
                     LitKind::Num(n) => n.to_string(),
                     LitKind::Str(str) => str.to_owned(),
+                    LitKind::Bool(val) => val.to_string(),
                 };
                 format!(
                     "\n{}{}({})",
