@@ -277,7 +277,7 @@ impl<'a> Parser<'_> {
             }
         })?;
         self.eat(TokenKind::BinOp(BinOpKind::Eql))?;
-        // TODO: a bit hacky, but works for now. essentially, the left-hand side of the let
+        // A bit hacky, but works for now. essentially, the left-hand side of the let
         // expression is parsed here instead of self.parse_expr() so the type annotation can be
         // captured properly. then, an expr is just returned anyways.
         let expr = Box::new (self.parse_expr()?);

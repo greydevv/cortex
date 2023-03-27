@@ -101,8 +101,8 @@ impl<'a> Lexer<'_> {
     /// Peeks the next token from the source code.
     pub fn peek_token(&mut self) -> Result<Token> {
         // TODO: possibly save peeked Token in an internal, private member such that a call to
-        // next_token() after a peek_token() only must retrieve token from member
-        // save state
+        // next_token() after a peek_token() only must retrieve token from member save state. This
+        // is a premature optimization and is unnecessary for now.
         let prev_pos = self.pos;
         let prev_c = self.c;
         let prev_iter = self.chars.clone();
