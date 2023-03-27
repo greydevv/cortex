@@ -59,11 +59,11 @@ impl Literal for TyKind {
 impl MaybeFrom<String> for TyKind {
     fn maybe_from(value: &String) -> Option<TyKind> {
         match value.as_str() {
-            // "i8" => Some(TyKind::Int(IntSize::N8)),
-            // "i16" => Some(TyKind::Int(IntSize::N16)),
+            "i8" => Some(TyKind::Int(IntSize::N8)),
+            "i16" => Some(TyKind::Int(IntSize::N16)),
             "i32" => Some(TyKind::Int(IntSize::N32)),
-            // "i64" => Some(TyKind::Int(IntSize::N64)),
-            // "i128" => Some(TyKind::Int(IntSize::N128)),
+            "i64" => Some(TyKind::Int(IntSize::N64)),
+            "i128" => Some(TyKind::Int(IntSize::N128)),
             _ => None,
         }
     }

@@ -211,8 +211,12 @@ impl<'a> Validator<'_> {
                 // validating the right-hand side of the equals sign first
                 self.validate_expr(expr)
                     .and_then(|rhs_ty_kind| {
+                        if ident.ty_kind == TyKind::Infer {
+                            ident.update_ty(rhs_ty_kind);
+                        } else {
+                            ident.ty_kind.compat(&rhs_ty_kind)?;
+                        }
                         self.validate_ident(ident)?;
-                        ident.update_ty(rhs_ty_kind);
                         Ok(rhs_ty_kind)
                     }),
             _ => unimplemented!()
@@ -229,16 +233,13 @@ impl<'a> Validator<'_> {
             IdentCtx::Def
                 | IdentCtx::Param
                 | IdentCtx::FuncDef =>
-                    match ident.ty_kind {
-                        TyKind::Infer => todo!("TYPE INFERENCE!"),
-                        _ =>
-                            match self.symb_tab.try_insert(ident) {
-                                Some(ref conflict) =>
-                                    Err(CortexError::illegal_ident(&self.ctx, &ident, Some(conflict)).into()),
-                                None => Ok(ident.ty_kind),
-                            },
-                    }
-                    // format error based on context (param, func, variable)
+                    // ident.ty_kind should NEVER be TyKind::Infer here (handled in let statement
+                    // validation)
+                    match self.symb_tab.try_insert(ident) {
+                        Some(ref conflict) =>
+                            Err(CortexError::illegal_ident(&self.ctx, &ident, Some(conflict)).into()),
+                        None => Ok(ident.ty_kind),
+                    },
             IdentCtx::Ref
                 | IdentCtx::FuncCall =>
                     match self.symb_tab.try_query(ident) {
