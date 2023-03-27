@@ -1,3 +1,5 @@
+//! Symbols relevant to typing.
+
 use std::fmt;
 
 use crate::symbols::{ Literal, MaybeFrom };
@@ -8,6 +10,7 @@ use crate::io::error::{
     DiagnosticKind,
 };
 
+/// The various kinds of built-in types recognized by the compiler.
 #[derive(PartialEq, Clone, Copy, Debug)]
 pub enum TyKind {
     // UInt(IntSize),
@@ -20,6 +23,7 @@ pub enum TyKind {
 }
 
 impl TyKind {
+    /// Checks whether two types are compatible with one another, returning an error if not.
     pub fn compat(&self, other: &TyKind) -> Result {
         if *self == *other {
             Ok(())
@@ -69,6 +73,7 @@ impl MaybeFrom<String> for TyKind {
     }
 }
 
+/// The various sizes of both signed and unsigned integers.
 #[derive(PartialEq, Clone, Copy, Debug)]
 pub enum IntSize {
     N8 = 8,

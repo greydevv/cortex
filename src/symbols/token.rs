@@ -1,3 +1,5 @@
+//! Structures relevant to tokenization.
+
 use std::convert::From;
 use std::fmt;
 
@@ -20,6 +22,7 @@ pub struct Token {
 }
 
 impl Token {
+    /// Creates a new token.
     pub fn new(kind: TokenKind, span: FileSpan) -> Token {
         Token {
             kind,
@@ -55,10 +58,12 @@ impl Token {
         }
     }
 
+    /// Returns `true` if the token represented EOF. Otherwise, `false`.
     pub fn is_eof(&self) -> bool {
         self.kind == TokenKind::EOF
     }
 
+    /// Gets the raw value of the token.
     pub fn value(&self) -> String {
         self.kind.literal()
     }
