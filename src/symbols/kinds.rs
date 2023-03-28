@@ -1,5 +1,6 @@
 use crate::symbols::{ Literal, MaybeFrom };
 
+/// The various kinds of delimiters.
 #[derive(PartialEq, Debug, Clone)]
 pub enum DelimKind {
     Period,
@@ -19,6 +20,7 @@ impl Literal for DelimKind {
     }
 }
 
+/// The various kinds of braces.
 #[derive(PartialEq, Debug, Clone)]
 pub enum BraceKind {
     Paren,
@@ -26,12 +28,14 @@ pub enum BraceKind {
     Square,
 }
 
+/// Describes left or right operator associativity.
 #[derive(PartialEq)]
 pub enum OpAssoc {
     Left,
     Right
 }
 
+/// The various kinds of binary operators.
 #[derive(PartialEq, Debug, Clone, strum_macros::Display)]
 pub enum BinOpKind {
     // other operators
