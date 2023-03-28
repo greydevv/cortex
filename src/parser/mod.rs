@@ -29,7 +29,6 @@ use crate::symbols::{
     DelimKind,
     BraceKind,
     Literal,
-    MaybeFrom,
 };
 use crate::sess::SessCtx;
 
@@ -429,13 +428,13 @@ impl<'a> Parser<'_> {
         let mut lhs = self.parse_term()?;
 
         loop {
-            match BinOpKind::maybe_from(&self.tok.kind) {
-                Some(op_kind) => {
-                    let prec = op_kind.prec();
+            match self.tok.kind.clone() {
+                TokenKind::BinOp(bin_op_kind) => {
+                    let prec = bin_op_kind.prec();
                     if prec < min_prec {
                         break;
                     }
-                    let assoc = op_kind.assoc();
+                    let assoc = bin_op_kind.assoc();
                     let next_min_prec = match assoc {
                         OpAssoc::Right => prec + 1,
                         OpAssoc::Left => prec,
@@ -443,12 +442,12 @@ impl<'a> Parser<'_> {
                     self.advance()?;
                     let rhs = self.parse_expr_helper(next_min_prec)?;
                     lhs = Expr::new(ExprKind::Binary(
-                        op_kind,
+                        bin_op_kind,
                         Box::new(lhs),
                         Box::new(rhs),
                     ));
                 },
-                None => break,
+                _ => break,
             }
         }
         Ok(lhs)

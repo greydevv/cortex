@@ -99,33 +99,6 @@ impl Literal for BinOpKind {
     }
 }
 
-impl MaybeFrom<TokenKind> for BinOpKind {
-    /// Attempts to convert a generic [`TokenKind`] into a `BinOpKind`.
-    ///
-    /// It is possible for a unary negation operation to be converted into a binary subtraction
-    /// operator. Take the following example.
-    /// 
-    /// ```
-    /// 16 -3
-    /// 16 + -3
-    /// ```
-    /// Above, the two equations are mathematically equivalent. But they are not syntactically
-    /// equivalent. The first equation yields three tokens whereas the second equation yields four
-    /// tokens.
-    ///
-    /// Furthermore, the first equation's '-' will be seen as a unary negation since it is not
-    /// followed by whitespace. However, it should be converted into a binary subtraction. This is
-    /// where `BinOpKind::maybe_from(possible_unary_op)` can be used.
-    fn maybe_from(tok_kind: &TokenKind) -> Option<BinOpKind> {
-        match tok_kind {
-            TokenKind::BinOp(op_kind) => Some(op_kind.clone()),
-            TokenKind::UnaryOp(UnaryOpKind::Neg) => Some(BinOpKind::Sub),
-            _ => None,
-        }
-    }
-}
-
-
 #[derive(PartialEq, Debug, Clone, strum_macros::Display)]
 pub enum UnaryOpKind {
     /// arithmetic negation (e.g., negated `x` is `-x`)
@@ -152,7 +125,7 @@ pub enum KwdKind {
     Let,
     Ret,
     If,
-    Else, // don't need else if, parser just peeks for If if on Else
+    Else, // An else-if variant is not required, parser just peeks for If if on Else
     While,
 }
 
