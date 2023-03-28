@@ -413,12 +413,17 @@ mod tests {
     #[test]
     fn keywords() -> Result {
         expect_toks_from_src(
-            "func include for",
+            "func include for let ret if else while",
             vec![
                 Token::new(TokenKind::Kwd(KwdKind::Func), FileSpan::new(FilePos::new(1, 1), FilePos::new(1, 5))),
                 Token::new(TokenKind::Kwd(KwdKind::Include), FileSpan::new(FilePos::new(1, 6), FilePos::new(1, 13))),
                 Token::new(TokenKind::Kwd(KwdKind::For), FileSpan::new(FilePos::new(1, 14), FilePos::new(1, 17))),
-                Token::new(TokenKind::EOF, FileSpan::one(FilePos::new(1, 17))),
+                Token::new(TokenKind::Kwd(KwdKind::Let), FileSpan::new(FilePos::new(1, 18), FilePos::new(1, 21))),
+                Token::new(TokenKind::Kwd(KwdKind::Ret), FileSpan::new(FilePos::new(1, 22), FilePos::new(1, 25))),
+                Token::new(TokenKind::Kwd(KwdKind::If), FileSpan::new(FilePos::new(1, 26), FilePos::new(1, 28))),
+                Token::new(TokenKind::Kwd(KwdKind::Else), FileSpan::new(FilePos::new(1, 29), FilePos::new(1, 33))),
+                Token::new(TokenKind::Kwd(KwdKind::While), FileSpan::new(FilePos::new(1, 34), FilePos::new(1, 39))),
+                Token::new(TokenKind::EOF, FileSpan::one(FilePos::new(1, 39))),
             ]
         )
     }
