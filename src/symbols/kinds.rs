@@ -1,5 +1,4 @@
 use crate::symbols::{ Literal, MaybeFrom };
-use crate::symbols::TokenKind;
 
 #[derive(PartialEq, Debug, Clone)]
 pub enum DelimKind {
