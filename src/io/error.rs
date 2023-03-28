@@ -372,3 +372,17 @@ impl DiagnosticKind {
     //     }
     // }
 }
+
+#[cfg(test)]
+pub mod tests {
+    use super::*;
+
+    pub fn assert_diags<T>(result: Result<T>, expected_diags: Vec<Diagnostic>) {
+        assert!(result.is_err());
+        let CortexError(diags) = *result.err().unwrap();
+        assert!(diags.len() == expected_diags.len());
+        diags.iter()
+            .zip(&expected_diags)
+            .for_each(|(diag, expected_diag)| assert!(diag == expected_diag))
+    }
+}

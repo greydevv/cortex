@@ -150,18 +150,18 @@ impl fmt::Display for FilePos {
 }
 
 #[cfg(test)]
-impl FileHandler {
-    pub fn pseudo_fh(src: String) -> FileHandler {
-        FileHandler {
-            file_path: String::new(),
-            src,
-        }
-    }
-}
-
-#[cfg(test)]
 mod tests {
     use super::*;
+    use crate::io::error::tests::assert_diags;
+
+    impl FileHandler {
+        pub fn pseudo_fh(src: &str) -> FileHandler {
+            FileHandler {
+                file_path: String::new(),
+                src: src.to_string(),
+            }
+        }
+    }
 
     #[test]
     fn open_existing_file() -> Result {
@@ -178,11 +178,7 @@ mod tests {
             )
         ];
         let result = FileHandler::new(String::from("iamsomenonexistentfile"));
-        assert!(result.is_err());
-        let CortexError(diags) = *result.err().unwrap();
-        assert!(diags.len() == expected_diags.len());
-        diags.iter()
-            .zip(&expected_diags)
-            .for_each(|(diag, expected_diag)| assert!(diag == expected_diag))
+        
+        assert_diags(result, expected_diags);
     }
 }

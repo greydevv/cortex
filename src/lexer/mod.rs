@@ -336,243 +336,224 @@ impl<'a> Lexer<'_> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::io::file::FileHandler;
     use crate::io::error::{
         Result,
-        CortexError,
         Diagnostic,
         DiagnosticKind,
     };
+    use crate::io::file::FileHandler;
+    use crate::io::error::tests::assert_diags;
 
-    #[test]
-    fn empty_file() -> Result {
-        let ctx = SessCtx::new(FileHandler::pseudo_fh(String::new()));
-        let mut lexer = Lexer::new(&ctx);
-
-        let tok = lexer.next_token()?;
-        assert_eq!(tok.kind, TokenKind::EOF);
-        assert_eq!(tok.span, FileSpan::one(FilePos::new(1, 1)));
-        Ok(())
-    }
-
-    #[test]
-    fn leading_whitespace() -> Result {
-        let src = String::from("  \n\n");
+    fn expect_toks_from_src(src: &str, expected_toks: Vec<Token>) -> Result {
         let ctx = SessCtx::new(FileHandler::pseudo_fh(src));
         let mut lexer = Lexer::new(&ctx);
-
-        let tok = lexer.next_token()?;
-        assert_eq!(tok.kind, TokenKind::EOF);
-        assert_eq!(tok.span, FileSpan::one(FilePos::new(3, 1)));
-        Ok(())
-    }
-
-    #[test]
-    fn trailing_whitespace() -> Result {
-        let src = String::from(";\n\n  ");
-        let ctx = SessCtx::new(FileHandler::pseudo_fh(src));
-        let mut lexer = Lexer::new(&ctx);
-
-        lexer.next_token()?;
-        let tok = lexer.next_token()?;
-        assert_eq!(tok.kind, TokenKind::EOF);
-        assert_eq!(tok.span, FileSpan::one(FilePos::new(3, 3)));
-        Ok(())
-    }
-
-    #[test]
-    fn leading_and_trailing_whitespace() -> Result {
-        let src = String::from("  \n\n  \n  ");
-        let ctx = SessCtx::new(FileHandler::pseudo_fh(src));
-        let mut lexer = Lexer::new(&ctx);
-
-        let tok = lexer.next_token()?;
-        assert_eq!(tok.kind, TokenKind::EOF);
-        assert_eq!(tok.span, FileSpan::one(FilePos::new(4, 3)));
-        Ok(())
-    }
-
-    #[test]
-    fn keywords() -> Result {
-        let src = String::from("func include for");
-        let ctx = SessCtx::new(FileHandler::pseudo_fh(src));
-        let mut lexer = Lexer::new(&ctx);
-
-        let expected_toks = vec![
-            Token::new(TokenKind::Kwd(KwdKind::Func), FileSpan::new(FilePos::new(1, 1), FilePos::new(1, 5))),
-            Token::new(TokenKind::Kwd(KwdKind::Include), FileSpan::new(FilePos::new(1, 6), FilePos::new(1, 13))),
-            Token::new(TokenKind::Kwd(KwdKind::For), FileSpan::new(FilePos::new(1, 14), FilePos::new(1, 17))),
-            Token::new(TokenKind::EOF, FileSpan::one(FilePos::new(1, 17))),
-        ];
-
         for expected in expected_toks {
             let tok = lexer.next_token()?;
             assert_eq!(tok.kind, expected.kind);
             assert_eq!(tok.span, expected.span);
         }
         Ok(())
+    }
+
+    fn expect_diags_from_src<D, R, T>(src: &str, get_diags: D, produce_result: R)
+    where
+        D: FnOnce(&mut Lexer) -> Vec<Diagnostic>,
+        // Don't care what the wrapped type in Ok is.
+        R: FnOnce(&mut Lexer) -> Result<T>,
+    {
+        let ctx = SessCtx::new(FileHandler::pseudo_fh(src));
+        let mut lexer = Lexer::new(&ctx);
+        let expected_diags = get_diags(&mut lexer);
+        let result = produce_result(&mut lexer);
+
+        assert_diags(result, expected_diags);
+    }
+
+    #[test]
+    fn empty_file() -> Result {
+        expect_toks_from_src(
+            "",
+            vec![
+                Token::new(TokenKind::EOF, FileSpan::one(FilePos::new(1, 1)))
+            ]
+        )
+    }
+
+    #[test]
+    fn leading_whitespace() -> Result {
+        expect_toks_from_src(
+            "  \n\n",
+            vec![
+                Token::new(TokenKind::EOF, FileSpan::one(FilePos::new(3, 1)))
+            ]
+        )
+    }
+
+    #[test]
+    fn trailing_whitespace() -> Result {
+        expect_toks_from_src(
+            ";\n\n  ",
+            vec![
+                Token::new(TokenKind::Delim(DelimKind::Scolon), FileSpan::one(FilePos::new(1, 1))),
+                Token::new(TokenKind::EOF, FileSpan::one(FilePos::new(3, 3)))
+            ]
+        )
+    }
+
+    #[test]
+    fn leading_and_trailing_whitespace() -> Result {
+        expect_toks_from_src(
+            "  \n\n  \n  ",
+            vec![
+                Token::new(TokenKind::EOF, FileSpan::one(FilePos::new(4, 3)))
+            ]
+        )
+    }
+
+    #[test]
+    fn keywords() -> Result {
+        expect_toks_from_src(
+            "func include for",
+            vec![
+                Token::new(TokenKind::Kwd(KwdKind::Func), FileSpan::new(FilePos::new(1, 1), FilePos::new(1, 5))),
+                Token::new(TokenKind::Kwd(KwdKind::Include), FileSpan::new(FilePos::new(1, 6), FilePos::new(1, 13))),
+                Token::new(TokenKind::Kwd(KwdKind::For), FileSpan::new(FilePos::new(1, 14), FilePos::new(1, 17))),
+                Token::new(TokenKind::EOF, FileSpan::one(FilePos::new(1, 17))),
+            ]
+        )
+    }
+
+    #[test]
+    fn boolean_literal() -> Result {
+        expect_toks_from_src(
+            "true false",
+            vec![
+                Token::new(TokenKind::Lit(LitKind::Bool(true)), FileSpan::new(FilePos::new(1, 1), FilePos::new(1, 5))),
+                Token::new(TokenKind::Lit(LitKind::Bool(false)), FileSpan::new(FilePos::new(1, 6), FilePos::new(1, 11))),
+            ]
+        )
     }
 
     #[test]
     fn unterminated_string_literal() {
         // Lexer will encounter EOF before a closing double-quote
-        let src = String::from("\"Hello, world!");
-        let ctx = SessCtx::new(FileHandler::pseudo_fh(src));
-        let mut lexer = Lexer::new(&ctx);
-
-        let expected_diags = vec![
-            Diagnostic::new_with_spans(
-                "unterminated string literal".to_string(),
-                DiagnosticKind::Error,
-                &ctx.fh,
+        expect_diags_from_src(
+            "\"Hello, world!",
+            |lexer| {
                 vec![
-                    (ctx.file_path(), FileSpan::new(FilePos::new(1, 1), FilePos::new(1, 15))),
-                ],
-            )
-        ];
-        let result = lexer.next_token();
-
-        assert!(result.is_err());
-        let CortexError(diags) = *result.err().unwrap();
-        assert!(diags.len() == expected_diags.len());
-        diags.iter()
-            .zip(&expected_diags)
-            .for_each(|(diag, expected_diag)| assert!(diag == expected_diag))
+                    Diagnostic::new_with_spans(
+                        "unterminated string literal".to_string(),
+                        DiagnosticKind::Error,
+                        &lexer.ctx.fh,
+                        vec![
+                            (lexer.ctx.file_path(), FileSpan::new(FilePos::new(1, 1), FilePos::new(1, 15))),
+                        ],
+                    )
+                ]
+            },
+            |lexer: &mut Lexer| {
+                lexer.next_token()
+            }
+        )
     }
 
     #[test]
     fn closed_braces() -> Result {
-        let src = String::from("([\n\n\n()]) [] {\n{{[{}]}\n}\n}");
-        let ctx = SessCtx::new(FileHandler::pseudo_fh(src));
-        let mut lexer = Lexer::new(&ctx);
-
-        let expected_toks = vec![
-            Token::new(TokenKind::BraceOpen(BraceKind::Paren), FileSpan::one(FilePos::new(1, 1))),
-            Token::new(TokenKind::BraceOpen(BraceKind::Square), FileSpan::one(FilePos::new(1, 2))),
-            Token::new(TokenKind::BraceOpen(BraceKind::Paren), FileSpan::one(FilePos::new(4, 1))),
-            Token::new(TokenKind::BraceClosed(BraceKind::Paren), FileSpan::one(FilePos::new(4, 2))),
-            Token::new(TokenKind::BraceClosed(BraceKind::Square), FileSpan::one(FilePos::new(4, 3))),
-            Token::new(TokenKind::BraceClosed(BraceKind::Paren), FileSpan::one(FilePos::new(4, 4))),
-            Token::new(TokenKind::BraceOpen(BraceKind::Square), FileSpan::one(FilePos::new(4, 6))),
-            Token::new(TokenKind::BraceClosed(BraceKind::Square), FileSpan::one(FilePos::new(4, 7))),
-            Token::new(TokenKind::BraceOpen(BraceKind::Curly), FileSpan::one(FilePos::new(4, 9))),
-            Token::new(TokenKind::BraceOpen(BraceKind::Curly), FileSpan::one(FilePos::new(5, 1))),
-            Token::new(TokenKind::BraceOpen(BraceKind::Curly), FileSpan::one(FilePos::new(5, 2))),
-            Token::new(TokenKind::BraceOpen(BraceKind::Square), FileSpan::one(FilePos::new(5, 3))),
-            Token::new(TokenKind::BraceOpen(BraceKind::Curly), FileSpan::one(FilePos::new(5, 4))),
-            Token::new(TokenKind::BraceClosed(BraceKind::Curly), FileSpan::one(FilePos::new(5, 5))),
-            Token::new(TokenKind::BraceClosed(BraceKind::Square), FileSpan::one(FilePos::new(5, 6))),
-            Token::new(TokenKind::BraceClosed(BraceKind::Curly), FileSpan::one(FilePos::new(5, 7))),
-            Token::new(TokenKind::BraceClosed(BraceKind::Curly), FileSpan::one(FilePos::new(6, 1))),
-            Token::new(TokenKind::BraceClosed(BraceKind::Curly), FileSpan::one(FilePos::new(7, 1))),
-            Token::eof(FilePos::new(7,2)),
-        ];
-
-        for expected in expected_toks {
-            let tok = lexer.next_token()?;
-            assert_eq!(tok.kind, expected.kind);
-            assert_eq!(tok.span, expected.span);
-        }
-        Ok(())
+        expect_toks_from_src(
+            "([\n\n\n()]) [] {\n{{[{}]}\n}\n}",
+            vec![
+                Token::new(TokenKind::BraceOpen(BraceKind::Paren), FileSpan::one(FilePos::new(1, 1))),
+                Token::new(TokenKind::BraceOpen(BraceKind::Square), FileSpan::one(FilePos::new(1, 2))),
+                Token::new(TokenKind::BraceOpen(BraceKind::Paren), FileSpan::one(FilePos::new(4, 1))),
+                Token::new(TokenKind::BraceClosed(BraceKind::Paren), FileSpan::one(FilePos::new(4, 2))),
+                Token::new(TokenKind::BraceClosed(BraceKind::Square), FileSpan::one(FilePos::new(4, 3))),
+                Token::new(TokenKind::BraceClosed(BraceKind::Paren), FileSpan::one(FilePos::new(4, 4))),
+                Token::new(TokenKind::BraceOpen(BraceKind::Square), FileSpan::one(FilePos::new(4, 6))),
+                Token::new(TokenKind::BraceClosed(BraceKind::Square), FileSpan::one(FilePos::new(4, 7))),
+                Token::new(TokenKind::BraceOpen(BraceKind::Curly), FileSpan::one(FilePos::new(4, 9))),
+                Token::new(TokenKind::BraceOpen(BraceKind::Curly), FileSpan::one(FilePos::new(5, 1))),
+                Token::new(TokenKind::BraceOpen(BraceKind::Curly), FileSpan::one(FilePos::new(5, 2))),
+                Token::new(TokenKind::BraceOpen(BraceKind::Square), FileSpan::one(FilePos::new(5, 3))),
+                Token::new(TokenKind::BraceOpen(BraceKind::Curly), FileSpan::one(FilePos::new(5, 4))),
+                Token::new(TokenKind::BraceClosed(BraceKind::Curly), FileSpan::one(FilePos::new(5, 5))),
+                Token::new(TokenKind::BraceClosed(BraceKind::Square), FileSpan::one(FilePos::new(5, 6))),
+                Token::new(TokenKind::BraceClosed(BraceKind::Curly), FileSpan::one(FilePos::new(5, 7))),
+                Token::new(TokenKind::BraceClosed(BraceKind::Curly), FileSpan::one(FilePos::new(6, 1))),
+                Token::new(TokenKind::BraceClosed(BraceKind::Curly), FileSpan::one(FilePos::new(7, 1))),
+                Token::eof(FilePos::new(7,2)),
+            ]
+        )
     }
 
     #[test]
     fn unclosed_brace() {
-        let src = String::from("(\n{)");
-        let ctx = SessCtx::new(FileHandler::pseudo_fh(src));
-        let mut lexer = Lexer::new(&ctx);
-
-        for _ in 0..2 {
-            assert!(lexer.next_token().is_ok());
-        }
-
-        let expected_diags = vec![
-            Diagnostic::new_with_spans(
-                "unclosed '{'".to_string(),
-                DiagnosticKind::Error,
-                &ctx.fh,
+        expect_diags_from_src(
+            "(\n{)",
+            |lexer| {
                 vec![
-                    (ctx.file_path(), FileSpan::one(FilePos::new(2, 1))),
-                ],
-            )
-        ];
-        let result = lexer.next_token();
-
-        assert!(result.is_err());
-        let CortexError(diags) = *result.err().unwrap();
-        assert!(diags.len() == expected_diags.len());
-        diags.iter()
-            .zip(&expected_diags)
-            .for_each(|(diag, expected_diag)| assert!(diag == expected_diag))
+                    Diagnostic::new_with_spans(
+                        "unclosed '{'".to_string(),
+                        DiagnosticKind::Error,
+                        &lexer.ctx.fh,
+                        vec![
+                            (lexer.ctx.file_path(), FileSpan::one(FilePos::new(2, 1))),
+                        ],
+                    )
+                ]
+            },
+            |lexer: &mut Lexer| {
+                for _ in 0..2 {
+                    assert!(lexer.next_token().is_ok());
+                }
+                lexer.next_token()
+            }
+        )
     }
 
     #[test]
     fn unopened_brace() {
-        let src = String::from("(\n})");
-        let ctx = SessCtx::new(FileHandler::pseudo_fh(src));
-        let mut lexer = Lexer::new(&ctx);
-
-        // no need to loop, first next_token is only call that should succeed
-        assert!(lexer.next_token().is_ok());
-
-        let expected_diags = vec![
-            Diagnostic::new_with_spans(
-                "unopened '}'".to_string(),
-                DiagnosticKind::Error,
-                &ctx.fh,
+        expect_diags_from_src(
+            "(\n})",
+            |lexer| {
                 vec![
-                    (ctx.file_path(), FileSpan::one(FilePos::new(2, 1))),
-                ],
-            )
-        ];
-        let result = lexer.next_token();
-
-        assert!(result.is_err());
-        let CortexError(diags) = *result.err().unwrap();
-        assert!(diags.len() == expected_diags.len());
-        diags.iter()
-            .zip(&expected_diags)
-            .for_each(|(diag, expected_diag)| assert!(diag == expected_diag))
+                    Diagnostic::new_with_spans(
+                        "unopened '}'".to_string(),
+                        DiagnosticKind::Error,
+                        &lexer.ctx.fh,
+                        vec![
+                            (lexer.ctx.file_path(), FileSpan::one(FilePos::new(2, 1))),
+                        ],
+                    )
+                ]
+            },
+            |lexer: &mut Lexer| {
+                assert!(lexer.next_token().is_ok());
+                lexer.next_token()
+            }
+        )
     }
 
     #[test]
     fn unary_negation() -> Result {
-        let src = String::from("-13");
-        let ctx = SessCtx::new(FileHandler::pseudo_fh(src));
-        let mut lexer = Lexer::new(&ctx);
-
-        let expected_toks = vec![
-            // treat unary operator as a binary operator at first
-            Token::new(TokenKind::BinOp(BinOpKind::Sub), FileSpan::one(FilePos::new(1, 1))),
-            Token::new(TokenKind::Lit(LitKind::Num(13)), FileSpan::new(FilePos::new(1, 2), FilePos::new(1, 4))),
-        ];
-
-        for expected in expected_toks {
-            let tok = lexer.next_token()?;
-            assert_eq!(tok.kind, expected.kind);
-            assert_eq!(tok.span, expected.span);
-        }
-
-        Ok(())
+        expect_toks_from_src(
+            "-13",
+            vec![
+                // Treat unary operator as a binary operator in lexer, leave it up to the parser to
+                // determine if it is meant as a unary operator or a binary operator.
+                Token::new(TokenKind::BinOp(BinOpKind::Sub), FileSpan::one(FilePos::new(1, 1))),
+                Token::new(TokenKind::Lit(LitKind::Num(13)), FileSpan::new(FilePos::new(1, 2), FilePos::new(1, 4))),
+            ]
+        )
     }
 
     #[test]
     fn unary_not() -> Result {
-        let src = String::from("!x");
-        let ctx = SessCtx::new(FileHandler::pseudo_fh(src));
-        let mut lexer = Lexer::new(&ctx);
-
-        let expected_toks = vec![
-            Token::new(TokenKind::UnaryOp(UnaryOpKind::Not), FileSpan::one(FilePos::new(1, 1))),
-            Token::new(TokenKind::Id(String::from("x")), FileSpan::one(FilePos::new(1, 2))),
-        ];
-
-        for expected in expected_toks {
-            let tok = lexer.next_token()?;
-            assert_eq!(tok.kind, expected.kind);
-            assert_eq!(tok.span, expected.span);
-        }
-
-        Ok(())
+        expect_toks_from_src(
+            "!x",
+            vec![
+                Token::new(TokenKind::UnaryOp(UnaryOpKind::Not), FileSpan::one(FilePos::new(1, 1))),
+                Token::new(TokenKind::Id(String::from("x")), FileSpan::one(FilePos::new(1, 2))),
+            ]
+        )
     }
 }
