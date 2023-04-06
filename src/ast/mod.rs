@@ -112,13 +112,33 @@ impl Func {
 #[derive(Clone)]
 pub struct Expr {
     kind: ExprKind,
+    span: FileSpan,
 }
 
 impl Expr {
     /// Creates an expression node.
-    pub fn new(kind: ExprKind) -> Expr {
-        Expr { kind }
+    pub fn new(kind: ExprKind, span: FileSpan) -> Expr {
+        Expr { kind, span }
     }
+
+    pub fn fold(&mut self) -> Option<Expr> {
+        match &self.kind {
+            // ExprKind::Binary(bin_op_kind, lhs, rhs) => ExprKind::fold_binary(bin_op_kind, lhs, rhs),
+            _ => None,
+        }
+    }
+
+    pub fn span(&self) -> &FileSpan {
+        &self.span
+    }
+
+    // fn fold_binary(bin_op_kind: &BinOpKind, lhs: &Box<Expr>, rhs: &Box<Expr>) -> Option<Expr> {
+    //     match (&lhs.kind, &rhs.kind) {
+    //         (ExprKind::Lit(LitKind::Num(a)), ExprKind::Lit(LitKind::Num(b))) =>
+    //             Some(Expr::new(ExprKind::Lit(LitKind::Num(a + b)))),
+    //         _ => unimplemented!(),
+    //     }
+    // }
 }
 
 /// The various kinds of expression components.

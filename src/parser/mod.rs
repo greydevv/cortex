@@ -84,6 +84,8 @@ impl<'a> Parser<'_> {
     /// set of curly braces, `{` and `}`.
     fn parse_compound(&mut self) -> Result<Expr> {
         let mut children = Vec::new();
+        // this will be reset in the loop
+        let mut span = self.tok.span;
         self.eat(TokenKind::BraceOpen(BraceKind::Curly))?;
         loop {
             let child = match self.tok.kind.clone() {
@@ -94,6 +96,7 @@ impl<'a> Parser<'_> {
                 },
                 TokenKind::Kwd(ref kwd_kind) => self.parse_kwd(kwd_kind)?,
                 TokenKind::BraceClosed(BraceKind::Curly) => {
+                    span = span.to(&self.tok.span);
                     self.advance()?;
                     break;
                 }
@@ -101,16 +104,17 @@ impl<'a> Parser<'_> {
             };
             children.push(Box::new(child));
         }
-        Ok(Expr::new(ExprKind::Compound(children)))
+        Ok(Expr::new(ExprKind::Compound(children), span))
     }
 
     /// Parses an include statement, e.g., `include "some_file.cx"`.
     fn parse_include(&mut self) -> Result<Expr> {
+        let incl_kwd_span = self.tok.span;
         self.advance()?; // skip 'include' kwd
         if let TokenKind::Lit(LitKind::Str(_)) = self.tok.kind {
             let incl = Expr::new(ExprKind::Stmt(
                 StmtKind::Incl(self.tok.value())
-            ));
+            ), incl_kwd_span.to(&self.tok.span));
             self.advance()?; // skip string
             self.eat(TokenKind::Delim(DelimKind::Scolon))?;
             Ok(incl)
@@ -142,7 +146,7 @@ impl<'a> Parser<'_> {
             KwdKind::Else => {
                 self.advance()?;
                 let (kind, span) = match self.tok.kind {
-                    TokenKind::Kwd(KwdKind::If) => ("else if", self.prev_tok.span.to(self.tok.span)),
+                    TokenKind::Kwd(KwdKind::If) => ("else if", self.prev_tok.span.to(&self.tok.span)),
                     _ => ("else", self.prev_tok.span),
                 };
 
@@ -165,16 +169,19 @@ impl<'a> Parser<'_> {
 
     /// Parses a while loop.
     fn parse_while(&mut self) -> Result<Expr> {
+        let while_kwd_span = self.tok.span;
         self.advance()?; // skip 'while' kwd
         let expr = self.parse_expr()?;
         let body = self.parse_compound()?;
+        let span = while_kwd_span.to(body.span());
         Ok(Expr::new(ExprKind::Cond(
             CondKind::While(Box::new(expr), Box::new(body))
-        )))
+        ), span))
     }
 
     /// Parses an if/else if/else statement.
     fn parse_if(&mut self) -> Result<Expr> {
+        let if_kwd_span = self.tok.span;
         self.advance()?; // skip 'if' kwd
         match self.tok.kind {
             TokenKind::BraceOpen(BraceKind::Curly) =>
@@ -192,6 +199,7 @@ impl<'a> Parser<'_> {
         let body = self.parse_compound()?;
         let kind = match self.tok.kind {
             TokenKind::Kwd(KwdKind::Else) => {
+                let else_kwd_span = self.tok.span;
                 self.advance()?;
                 match self.tok.kind {
                     TokenKind::Kwd(KwdKind::If) =>
@@ -204,9 +212,10 @@ impl<'a> Parser<'_> {
                     TokenKind::BraceOpen(BraceKind::Curly) => {
                         // 'else' (no expr)
                         let else_body = self.parse_compound()?;
+                        let span = else_kwd_span.to(else_body.span());
                         let else_ast = Expr::new(ExprKind::Cond(
                             CondKind::Else(Box::new(else_body))
-                        ));
+                        ), span);
                         CondKind::If(
                             Box::new(expr),
                             Box::new(body),
@@ -223,7 +232,13 @@ impl<'a> Parser<'_> {
             },
             _ => CondKind::If(Box::new(expr), Box::new(body), None),
         };
-        Ok(Expr::new(ExprKind::Cond(kind)))
+        let span = if_kwd_span.to(match &kind {
+            CondKind::If(body, ..) => body.span(),
+            CondKind::Else(body, ..) => body.span(),
+            // TODO: Do I need this?
+            CondKind::While(body, ..) => body.span(),
+        });
+        Ok(Expr::new(ExprKind::Cond(kind), span))
     }
 
     /// Parses a type annotation, e.g., `x: i32`.
@@ -245,14 +260,17 @@ impl<'a> Parser<'_> {
 
     /// Parses a return statement.
     fn parse_ret(&mut self) -> Result<Expr> {
+        let ret_kwd_span = self.tok.span;
         self.advance()?; // skip 'ret' kwd
         let expr = self.parse_expr()?;
+        let span = ret_kwd_span.to(expr.span());
         self.eat(TokenKind::Delim(DelimKind::Scolon))?;
-        Ok(Expr::new(ExprKind::Stmt(StmtKind::Ret(Some(Box::new(expr))))))
+        Ok(Expr::new(ExprKind::Stmt(StmtKind::Ret(Some(Box::new(expr)))), span))
     }
 
     /// Parses a let statement.
     fn parse_let(&mut self) -> Result<Expr> {
+        let let_kwd_span = self.tok.span;
         self.advance()?; // skip 'let' kwd
         let ident = self.lexer.peek_token().and_then(|peek_tok| -> Result<Ident> {
             match peek_tok.kind {
@@ -280,8 +298,9 @@ impl<'a> Parser<'_> {
         // expression is parsed here instead of self.parse_expr() so the type annotation can be
         // captured properly. then, an expr is just returned anyways.
         let expr = Box::new (self.parse_expr()?);
+        let span = let_kwd_span.to(expr.span());
         self.eat(TokenKind::Delim(DelimKind::Scolon))?;
-        Ok(Expr::new(ExprKind::Stmt(StmtKind::Let(ident, expr))))
+        Ok(Expr::new(ExprKind::Stmt(StmtKind::Let(ident, expr)), span))
     }
 
     /// Parses a function.
@@ -330,21 +349,27 @@ impl<'a> Parser<'_> {
     /// Parses a term in an expression, i.e., a variable, literal, function call, etc..
     fn parse_term(&mut self) -> Result<Expr> {
         let node = match self.tok.kind.clone() {
-            TokenKind::Lit(lit_kind) => Expr::new(ExprKind::Lit(lit_kind)),
+            TokenKind::Lit(lit_kind) => Expr::new(ExprKind::Lit(lit_kind), self.tok.span),
             TokenKind::BinOp(BinOpKind::Sub) => {
                 // treat this as a unary operation
+                let op_span = self.tok.span;
                 self.advance()?; // skip operator
+                let expr = self.parse_term()?;
+                let span = op_span.to(expr.span());
                 return Ok(Expr::new(ExprKind::Unary(
                     UnaryOpKind::Neg,
-                    Box::new(self.parse_term()?)
-                )))
+                    Box::new(expr)
+                ), span));
             }
             TokenKind::UnaryOp(op_kind) => {
+                let op_span = self.tok.span;
                 self.advance()?; // skip operator
+                let expr = self.parse_term()?;
+                let span = op_span.to(expr.span());
                 return Ok(Expr::new(ExprKind::Unary(
                     op_kind.clone(),
-                    Box::new(self.parse_term()?)
-                )));
+                    Box::new(expr)
+                ), span));
             },
             TokenKind::Id(ref id) => return self.parse_ident_or_call(id),
             TokenKind::BraceOpen(ref brace_kind) if *brace_kind == BraceKind::Paren => {
@@ -395,7 +420,7 @@ impl<'a> Parser<'_> {
                 )
         };
 
-        Ok(Expr::new(expr_kind))
+        Ok(Expr::new(expr_kind, ident_span))
     }
 
     /// Parses a comma separated list of expressions, such as expressions passed as arguments to
@@ -441,11 +466,12 @@ impl<'a> Parser<'_> {
                     };
                     self.advance()?;
                     let rhs = self.parse_expr_helper(next_min_prec)?;
+                    let span = lhs.span().to(rhs.span());
                     lhs = Expr::new(ExprKind::Binary(
                         bin_op_kind,
                         Box::new(lhs),
                         Box::new(rhs),
-                    ));
+                    ), span);
                 },
                 _ => break,
             }

@@ -97,7 +97,7 @@ impl FileSpan {
 
     /// Creates a new file span by using the beginning of the current file span and the end of the
     /// provided file span.
-    pub fn to(&self, other: FileSpan) -> FileSpan {
+    pub fn to(&self, other: &FileSpan) -> FileSpan {
         // TODO: Do I need to check if the other file span is further along in the source code
         // than the current file span?
         FileSpan {
