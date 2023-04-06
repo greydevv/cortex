@@ -423,7 +423,7 @@ mod tests {
                 Token::new(TokenKind::Kwd(KwdKind::If), FileSpan::new(FilePos::new(1, 26), FilePos::new(1, 28))),
                 Token::new(TokenKind::Kwd(KwdKind::Else), FileSpan::new(FilePos::new(1, 29), FilePos::new(1, 33))),
                 Token::new(TokenKind::Kwd(KwdKind::While), FileSpan::new(FilePos::new(1, 34), FilePos::new(1, 39))),
-                Token::new(TokenKind::EOF, FileSpan::one(FilePos::new(1, 39))),
+                Token::eof(FilePos::new(1, 39)),
             ]
         )
     }
@@ -435,6 +435,7 @@ mod tests {
             vec![
                 Token::new(TokenKind::Lit(LitKind::Bool(true)), FileSpan::new(FilePos::new(1, 1), FilePos::new(1, 5))),
                 Token::new(TokenKind::Lit(LitKind::Bool(false)), FileSpan::new(FilePos::new(1, 6), FilePos::new(1, 11))),
+                Token::eof(FilePos::new(1, 11)),
             ]
         )
     }
@@ -547,6 +548,7 @@ mod tests {
                 // determine if it is meant as a unary operator or a binary operator.
                 Token::new(TokenKind::BinOp(BinOpKind::Sub), FileSpan::one(FilePos::new(1, 1))),
                 Token::new(TokenKind::Lit(LitKind::Num(13)), FileSpan::new(FilePos::new(1, 2), FilePos::new(1, 4))),
+                Token::eof(FilePos::new(1, 4)),
             ]
         )
     }
@@ -558,6 +560,7 @@ mod tests {
             vec![
                 Token::new(TokenKind::UnaryOp(UnaryOpKind::Not), FileSpan::one(FilePos::new(1, 1))),
                 Token::new(TokenKind::Id(String::from("x")), FileSpan::one(FilePos::new(1, 2))),
+                Token::eof(FilePos::new(1, 3)),
             ]
         )
     }
