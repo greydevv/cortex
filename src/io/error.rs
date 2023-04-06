@@ -8,7 +8,7 @@ use colored::Colorize;
 use clap::error::ContextKind;
 use clap::error::Error as ClapError;
 
-use crate::ast::{ Expr, Ident, IdentCtx };
+use crate::ast::{ Ident, IdentCtx };
 use crate::io::file::{ FileHandler, FileSpan };
 use crate::symbols::{ Token, Len, TyKind };
 use crate::sess::SessCtx;
