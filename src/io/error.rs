@@ -8,9 +8,9 @@ use colored::Colorize;
 use clap::error::ContextKind;
 use clap::error::Error as ClapError;
 
-use crate::ast::{ Ident, IdentCtx };
+use crate::ast::{ Expr, Ident, IdentCtx };
 use crate::io::file::{ FileHandler, FileSpan };
-use crate::symbols::{ Token, Len };
+use crate::symbols::{ Token, Len, TyKind };
 use crate::sess::SessCtx;
 
 /// Result alias used throughout compilation stages.
@@ -106,6 +106,16 @@ impl CortexError {
             DiagnosticKind::Error,
             &ctx.fh,
             vec![(ctx.file_path().clone(), tok.span)],
+        ).into()
+    }
+
+    pub fn incompat_types(ctx: &SessCtx, expected_ty: &TyKind, received_ty: &TyKind, expr_span: &FileSpan) -> CortexError {
+        Diagnostic::new_with_spans(
+            format!("expected type '{}' but got type '{}'", *expected_ty, *received_ty),
+            DiagnosticKind::Error,
+            &ctx.fh,
+            vec![(ctx.file_path().clone(), *expr_span)]
+            // some span needed here
         ).into()
     }
 

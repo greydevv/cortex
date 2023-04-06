@@ -162,17 +162,10 @@ impl<'a> Validator<'_> {
                 self.symb_tab.pop_scope();
                 Ok(TyKind::Void)
             },
-            ExprKind::Binary(ref op_kind, ref mut lhs, ref mut rhs) => {
-                let lhs_ty = self.validate_expr(lhs)?;
-                let rhs_ty = self.validate_expr(rhs)?;
-                self.validate_bin_op(op_kind, &lhs_ty, &rhs_ty)
-            }
+            ExprKind::Binary(ref op_kind, ref mut lhs, ref mut rhs) => self.validate_bin_op(op_kind, lhs, rhs),
             ExprKind::Stmt(ref mut stmt_kind) => self.validate_stmt(stmt_kind),
             ExprKind::Cond(ref mut cond_kind) => self.validate_cond(cond_kind),
-            ExprKind::Unary(ref unary_op_kind, ref mut expr) => {
-                let expr_ty = self.validate_expr(expr)?;
-                self.validate_unary_op(unary_op_kind, &expr_ty)
-            },
+            ExprKind::Unary(ref unary_op_kind, ref mut expr) => self.validate_unary_op(unary_op_kind, expr),
             ExprKind::Call(ref mut ident, ref mut args) => {
                 let func_ret_ty = self.validate_ident(ident)?;
                 args.iter_mut()
@@ -214,7 +207,9 @@ impl<'a> Validator<'_> {
                         if ident.ty_kind == TyKind::Infer {
                             ident.update_ty(rhs_ty_kind);
                         } else {
-                            ident.ty_kind.compat(&rhs_ty_kind)?;
+                            if ident.ty_kind.compat(&rhs_ty_kind).is_none() {
+                                return Err(CortexError::incompat_types(self.ctx, &ident.ty_kind, &rhs_ty_kind, expr.span()).into());
+                            }
                         }
                         self.validate_ident(ident)?;
                         Ok(rhs_ty_kind)
@@ -264,23 +259,33 @@ impl<'a> Validator<'_> {
 
     /// Expects a given expression to produce the boolean type.
     fn expect_bool_from(&mut self, expr: &mut Expr) -> Result {
-        self.validate_expr(expr)
-            .and_then(|ref ty_kind| TyKind::Bool.compat(ty_kind))
+        let expr_ty_kind = self.validate_expr(expr)?;
+        TyKind::Bool.compat(&expr_ty_kind)
+            .ok_or_else(|| CortexError::incompat_types(self.ctx, &TyKind::Bool, &expr_ty_kind, expr.span()).into())
+            .and_then(|_| Ok(()))
     }
 
     /// Helper method for validating a unary operation.
-    fn validate_unary_op(&self, unary_op_kind: &UnaryOpKind, expr_ty: &TyKind) -> Result<TyKind> {
-        let op_ty = match unary_op_kind {
+    fn validate_unary_op(&mut self, unary_op_kind: &UnaryOpKind, expr: &mut Expr) -> Result<TyKind> {
+        let expr_ty_kind = self.validate_expr(expr)?;
+        let op_ty_kind = match unary_op_kind {
             UnaryOpKind::Not => TyKind::Bool,
             UnaryOpKind::Neg => TyKind::Int(IntSize::N32),
         };
-        op_ty.compat(expr_ty)
-            .and_then(|_| Ok(op_ty))
+        op_ty_kind.compat(&expr_ty_kind)
+            .ok_or_else(|| CortexError::incompat_types(self.ctx, &op_ty_kind, &expr_ty_kind, expr.span()).into())
+            .and_then(|_| Ok(op_ty_kind))
     }
 
     /// Helper method for validating a binary operation.
-    fn validate_bin_op(&self, bin_op_kind: &BinOpKind, lhs_ty: &TyKind, rhs_ty: &TyKind) -> Result<TyKind> {
-        lhs_ty.compat(rhs_ty)?;
+    fn validate_bin_op(&mut self, bin_op_kind: &BinOpKind, lhs: &mut Expr, rhs: &mut Expr) -> Result<TyKind> {
+        let lhs_ty = self.validate_expr(lhs)?;
+        let rhs_ty = self.validate_expr(rhs)?;
+        if lhs_ty.compat(&rhs_ty).is_none() {
+            return Err(CortexError::incompat_types(self.ctx, &lhs_ty, &rhs_ty, rhs.span()).into());
+        }
+        // TODO: Need to check which operators can be applied to what type! And if an operator can
+        // be applied to a specific type, what type does that operation yield?
         let op_ty = match bin_op_kind {
             BinOpKind::Eql => TyKind::Void,
             BinOpKind::Gr

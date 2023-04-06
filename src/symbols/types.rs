@@ -3,12 +3,6 @@
 use std::fmt;
 
 use crate::symbols::{ Literal, MaybeFrom };
-use crate::io::error::{
-    Result,
-    CortexError,
-    Diagnostic,
-    DiagnosticKind,
-};
 
 /// The various kinds of built-in types recognized by the compiler.
 #[derive(PartialEq, Clone, Copy, Debug)]
@@ -24,19 +18,11 @@ pub enum TyKind {
 
 impl TyKind {
     /// Checks whether two types are compatible with one another, returning an error if not.
-    pub fn compat(&self, other: &TyKind) -> Result {
+    pub fn compat(&self, other: &TyKind) -> Option<&TyKind> {
         if *self == *other {
-            Ok(())
+            Some(self)
         } else {
-            Err(CortexError(
-                vec![
-                    Diagnostic::new(
-                        format!("expected type '{}' but got type '{}'", *self, *other),
-                        DiagnosticKind::Error,
-                        // some span needed here
-                    )
-                ]
-            ).into())
+            None
         }
     }
 }
