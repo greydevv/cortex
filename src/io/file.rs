@@ -1,16 +1,11 @@
 //! Helpers for dealing with files.
 
 use std::fs::File;
-use std::io::{ Read, ErrorKind };
 use std::fmt;
+use std::io::Read;
 
 use crate::symbols::Len;
-use crate::io::error::{
-    Result,
-    CortexError,
-    Diagnostic,
-    DiagnosticKind,
-};
+use crate::io::error::{ Result, CortexError, IOErrorWrapper };
 
 /// The object representing a source file.
 #[derive(Debug, Clone)]
@@ -22,9 +17,9 @@ pub struct FileHandler {
 impl FileHandler {
     /// Creates a new file handler given the file path.
     pub fn new(file_path: String) -> Result<FileHandler> {
-        let mut f = File::open(&file_path).map_err(|e| FileHandler::translate_err(e, &file_path))?;
+        let mut f = File::open(&file_path).map_err(|e| CortexError::from(IOErrorWrapper(e, &file_path)))?;
         let mut src = String::new();
-        f.read_to_string(&mut src).map_err(|e| FileHandler::translate_err(e, &file_path))?;
+        f.read_to_string(&mut src).map_err(|e| CortexError::from(IOErrorWrapper(e, &file_path)))?;
         Ok(FileHandler {
             file_path,
             src
@@ -34,20 +29,6 @@ impl FileHandler {
     /// Gets the source contents.
     pub fn contents(&self) -> &String {
         &self.src
-    }
-
-    /// Translates a [`std::io::Error`] into a [`CortexError`].
-    fn translate_err(error: std::io::Error, file_path: &String) -> CortexError {
-        let err_msg = match error.kind() {
-            ErrorKind::NotFound => format!("'{file_path}' does not exist"),
-            ErrorKind::PermissionDenied => format!("cannot open '{file_path}': permission denied"),
-            ErrorKind::InvalidData => format!("contents of '{file_path}' are not valid UTF-8"),
-            _ => format!("could not read '{file_path}'"),
-        };
-        Diagnostic::new(
-            err_msg,
-            DiagnosticKind::Error,
-        ).into()
     }
 
     /// Gets the file path.

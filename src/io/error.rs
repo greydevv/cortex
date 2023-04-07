@@ -2,6 +2,7 @@
 
 use std::fmt;
 use std::error::Error;
+use std::io::ErrorKind;
 use std::convert::From;
 
 use colored::Colorize;
@@ -33,6 +34,24 @@ impl From<ClapError> for CortexError {
                 ).into(),
             _ => unimplemented!()
         }
+    }
+}
+
+pub struct IOErrorWrapper<'a>(pub std::io::Error, pub &'a String);
+
+impl From<IOErrorWrapper<'_>> for CortexError {
+    fn from (value: IOErrorWrapper) -> CortexError {
+        let IOErrorWrapper(error, file_path) = value;
+        let err_msg = match error.kind() {
+            ErrorKind::NotFound => format!("'{file_path}' does not exist"),
+            ErrorKind::PermissionDenied => format!("cannot open '{file_path}': permission denied"),
+            ErrorKind::InvalidData => format!("contents of '{file_path}' are not valid UTF-8"),
+            _ => format!("could not read '{file_path}'"),
+        };
+        Diagnostic::new(
+            err_msg,
+            DiagnosticKind::Error,
+        ).into()
     }
 }
 
