@@ -185,14 +185,7 @@ impl<'a> Parser<'_> {
         self.advance()?; // skip 'if' kwd
         match self.tok.kind {
             TokenKind::BraceOpen(BraceKind::Curly) =>
-                return Err(CortexError(
-                    vec![
-                        Diagnostic::new(
-                            String::from("expected expression"),
-                            DiagnosticKind::Error,
-                        )
-                    ]
-                ).into()),
+                return Err(CortexError::expected_but_got(self.ctx, "expression", &self.tok).into()),
             _ => (),
         }
         let expr = self.parse_expr()?;
@@ -244,7 +237,7 @@ impl<'a> Parser<'_> {
     /// Parses a type annotation, e.g., `x: i32`.
     fn parse_type_annotation(&mut self, with_ident_ctx: IdentCtx) -> Result<Ident> {
         let ident_span = self.tok.span;
-        let ident = self.expect_id(format!("expected identifier but got '{}'", self.tok.value()))?;
+        let ident = self.expect_id("identifier")?;
         self.eat(TokenKind::Delim(DelimKind::Colon))?;
         if let TokenKind::Ty(ty_kind) = self.tok.kind.clone() {
             self.advance()?; // skip type
@@ -279,7 +272,7 @@ impl<'a> Parser<'_> {
                 TokenKind::BinOp(BinOpKind::Eql) => {
                     let ident_span = self.tok.span;
                     Ok(Ident::new(
-                        &self.expect_id(format!("expected identifier but got '{}'", self.tok.value()))?,
+                        &self.expect_id("identifier")?,
                         TyKind::Infer,
                         IdentCtx::Def,
                         ident_span,
@@ -307,7 +300,7 @@ impl<'a> Parser<'_> {
     fn parse_func(&mut self) -> Result<Func> {
         self.advance()?; // skip 'func' kwd
         let func_ident_span = self.tok.span;
-        let func_ident = self.expect_id(format!("expected function name but got '{}'", self.tok.value()))?;
+        let func_ident = self.expect_id("function name")?;
         self.eat(TokenKind::BraceOpen(BraceKind::Paren))?;
         let mut params = Vec::new();
         if let TokenKind::Id(_) = self.tok.kind {
@@ -487,18 +480,10 @@ impl<'a> Parser<'_> {
     }
 
     /// Expects an identifier and returns an error if none is found.
-    fn expect_id(&mut self, with_msg: String) -> Result<String> {
+    fn expect_id(&mut self, with_msg: &str) -> Result<String> {
         let result = match &self.tok.kind {
             TokenKind::Id(ident) => Ok(ident.to_owned()),
-            _ => Err(CortexError(
-                    vec![
-                        Diagnostic::new(
-                            with_msg,
-                            DiagnosticKind::Error,
-                            // self.tok.span,
-                        )
-                    ]
-                ).into())
+            _ => Err(CortexError::expected_but_got(self.ctx, with_msg, &self.tok).into())
         };
         self.advance()?;
         result
