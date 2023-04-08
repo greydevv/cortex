@@ -265,31 +265,39 @@ impl<'a> Parser<'_> {
     fn parse_let(&mut self) -> Result<Expr> {
         let let_kwd_span = self.tok.span;
         self.advance()?; // skip 'let' kwd
-        let ident = self.lexer.peek_token().and_then(|peek_tok| -> Result<Ident> {
-            match peek_tok.kind {
-                TokenKind::Delim(DelimKind::Colon) =>
-                    self.parse_type_annotation(IdentCtx::Def),
-                TokenKind::BinOp(BinOpKind::Eql) => {
-                    let ident_span = self.tok.span;
-                    Ok(Ident::new(
-                        &self.expect_id("identifier")?,
-                        TyKind::Infer,
-                        IdentCtx::Def,
-                        ident_span,
-                    ))
-                },
-                _ =>
-                    Err(CortexError::expected_but_got(
-                        &self.ctx,
-                        "type annotation or equals sign",
-                        &peek_tok,
-                    ).into()),
-            }
-        })?;
+        let ident = if let TokenKind::Id(_) = self.tok.kind {
+            self.lexer.peek_token().and_then(|peek_tok| -> Result<Ident> {
+                match peek_tok.kind {
+                    TokenKind::Delim(DelimKind::Colon) =>
+                        self.parse_type_annotation(IdentCtx::Def),
+                    TokenKind::BinOp(BinOpKind::Eql) => {
+                        let ident_span = self.tok.span;
+                        Ok(Ident::new(
+                            &self.expect_id("identifier")?,
+                            TyKind::Infer,
+                            IdentCtx::Def,
+                            ident_span,
+                        ))
+                    },
+                    _ =>
+                        Err(CortexError::expected_but_got(
+                            &self.ctx,
+                            "type annotation or equals sign",
+                            &peek_tok,
+                        ).into()),
+                }
+            })
+        } else {
+            Err(CortexError::expected_but_got(
+                &self.ctx,
+                "identifier",
+                &self.tok,
+            ).into())
+        }?;
         self.eat(TokenKind::BinOp(BinOpKind::Eql))?;
         // A bit hacky, but works for now. essentially, the left-hand side of the let
         // expression is parsed here instead of self.parse_expr() so the type annotation can be
-        // captured properly. then, an expr is just returned anyways.
+        // captured properly. Then, an expr is just returned anyways.
         let expr = Box::new (self.parse_expr()?);
         let span = let_kwd_span.to(expr.span());
         self.eat(TokenKind::Delim(DelimKind::Scolon))?;
