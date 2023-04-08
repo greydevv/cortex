@@ -158,8 +158,16 @@ pub enum ExprKind {
     Call(Ident, Vec<Box<Expr>>),
     /// Collection of expressions (block).
     Compound(Vec<Box<AstNode>>),
-    /// Conditionals (if, while, etc.).
+    /// Conditionals (if, else if, else).
     Cond(CondKind),
+    /// Loops (while, for).
+    Loop(LoopKind),
+}
+
+/// The various kinds of loops.
+#[derive(Clone, strum_macros::Display)]
+pub enum LoopKind {
+    While(Option<Box<Expr>>, Box<Expr>),
 }
 
 /// The various kinds of conditional expressions.
@@ -167,7 +175,7 @@ pub enum ExprKind {
 pub enum CondKind {
     If(Box<Expr>, Box<Expr>, Option<Box<Expr>>),
     Else(Box<Expr>),
-    While(Box<Expr>, Box<Expr>),
+    // While(Box<Expr>, Box<Expr>),
 }
 
 /// The various kinds of statements.
@@ -336,13 +344,25 @@ impl AstDebug for Expr {
                             cond_kind,
                             body.debug(indents+1),
                         ),
-                    CondKind::While(expr, body) =>
-                        format!(
-                            "({})\n{}\n{}",
-                            cond_kind,
-                            expr.debug(indents+1),
-                            body.debug(indents+1),
-                        ),
+                }
+            ExprKind::Loop(loop_kind) =>
+                match loop_kind {
+                    LoopKind::While(expr, body) =>
+                        match expr {
+                            Some(expr) =>
+                                format!(
+                                    "({})\n{}\n{}",
+                                    loop_kind,
+                                    expr.debug(indents+1),
+                                    body.debug(indents+1),
+                                ),
+                            None =>
+                                format!(
+                                    "({} (forever))\n{}",
+                                    loop_kind,
+                                    body.debug(indents+1),
+                                )
+                    }
                 }
         };
         format!("{}{}{}", "  ".repeat(indents), self.kind, out_string)

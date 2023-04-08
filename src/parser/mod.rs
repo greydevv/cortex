@@ -16,6 +16,7 @@ use crate::ast::{
     StmtKind,
     IdentCtx,
     CondKind,
+    LoopKind,
 };
 use crate::symbols::{
     Token,
@@ -171,11 +172,14 @@ impl<'a> Parser<'_> {
     fn parse_while(&mut self) -> Result<Expr> {
         let while_kwd_span = self.tok.span;
         self.advance()?; // skip 'while' kwd
-        let expr = self.parse_expr()?;
+        let expr = match self.tok.kind {
+            TokenKind::BraceOpen(BraceKind::Curly) => None,
+            _ => Some(Box::new(self.parse_expr()?)),
+        };
         let body = self.parse_compound()?;
         let span = while_kwd_span.to(body.span());
-        Ok(Expr::new(ExprKind::Cond(
-            CondKind::While(Box::new(expr), Box::new(body))
+        Ok(Expr::new(ExprKind::Loop(
+            LoopKind::While(expr, Box::new(body))
         ), span))
     }
 
@@ -228,8 +232,6 @@ impl<'a> Parser<'_> {
         let span = if_kwd_span.to(match &kind {
             CondKind::If(body, ..) => body.span(),
             CondKind::Else(body, ..) => body.span(),
-            // TODO: Do I need this?
-            CondKind::While(body, ..) => body.span(),
         });
         Ok(Expr::new(ExprKind::Cond(kind), span))
     }

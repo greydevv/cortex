@@ -15,6 +15,7 @@ use crate::ast::{
     StmtKind,
     LitKind,
     CondKind,
+    LoopKind,
     Ident,
     IdentCtx,
 };
@@ -165,6 +166,7 @@ impl<'a> Validator<'_> {
             ExprKind::Binary(ref op_kind, ref mut lhs, ref mut rhs) => self.validate_bin_op(op_kind, lhs, rhs),
             ExprKind::Stmt(ref mut stmt_kind) => self.validate_stmt(stmt_kind),
             ExprKind::Cond(ref mut cond_kind) => self.validate_cond(cond_kind),
+            ExprKind::Loop(ref mut loop_kind) => self.validate_loop(loop_kind),
             ExprKind::Unary(ref unary_op_kind, ref mut expr) => self.validate_unary_op(unary_op_kind, expr),
             ExprKind::Call(ref mut ident, ref mut args) => {
                 let func_ret_ty = self.validate_ident(ident)?;
@@ -190,9 +192,18 @@ impl<'a> Validator<'_> {
                 }
             },
             CondKind::Else(ref mut body) => self.validate_expr(body),
-            CondKind::While(ref mut expr, ref mut body) =>
-                self.expect_bool_from(expr)
-                    .and_then(|_| self.validate_expr(body))
+        }
+    }
+
+    /// Validates a loop.
+    fn validate_loop(&mut self, loop_kind: &mut LoopKind) -> Result<TyKind> {
+        match loop_kind {
+            LoopKind::While(ref mut expr, ref mut body) =>
+                match expr {
+                    Some(expr) => self.expect_bool_from(expr),
+                    None => Ok(())
+                }
+                .and_then(|_| self.validate_expr(body))
         }
     }
 
