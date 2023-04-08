@@ -133,7 +133,11 @@ impl fmt::Display for FilePos {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::io::error::tests::assert_diags;
+    use crate::io::error::{
+        Diagnostic,
+        DiagnosticKind,
+        tests::assert_diags
+    };
 
     impl FileHandler {
         pub fn pseudo_fh(src: &str) -> FileHandler {
