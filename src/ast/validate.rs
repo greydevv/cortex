@@ -24,9 +24,9 @@ use crate::sess::SessCtx;
 
 /// The symbol table object.
 struct SymbolTable {
-    // Global scope
+    /// Global scope
     global: HashMap<String, Ident>,
-    // Nested scopes
+    /// Nested scopes
     scopes: VecDeque<HashMap<String, Ident>>,
 }
 
