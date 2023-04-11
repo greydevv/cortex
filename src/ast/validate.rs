@@ -153,16 +153,7 @@ impl<'a> Validator<'_> {
         match expr.kind {
             ExprKind::Id(ref mut ident) => self.validate_ident(ident),
             ExprKind::Lit(ref lit_kind) => Ok(self.validate_lit(lit_kind)),
-            ExprKind::Compound(ref mut children) => {
-                self.symb_tab.push_scope();
-                children.iter_mut()
-                    .try_for_each(|c| -> Result {
-                        self.validate_node(c)?;
-                        Ok(())
-                    })?;
-                self.symb_tab.pop_scope();
-                Ok(TyKind::Void)
-            },
+            ExprKind::Compound(ref mut children) => self.validate_compound(children),
             ExprKind::Binary(ref op_kind, ref mut lhs, ref mut rhs) => self.validate_bin_op(op_kind, lhs, rhs),
             ExprKind::Stmt(ref mut stmt_kind) => self.validate_stmt(stmt_kind),
             ExprKind::Cond(ref mut cond_kind) => self.validate_cond(cond_kind),
@@ -178,6 +169,18 @@ impl<'a> Validator<'_> {
                 Ok(func_ret_ty)
             }
         }
+    }
+
+    /// Validates a block.
+    fn validate_compound(&mut self, children: &mut Vec<Box<AstNode>>) -> Result<TyKind> {
+        self.symb_tab.push_scope();
+        children.iter_mut()
+            .try_for_each(|c| -> Result {
+                self.validate_node(c)?;
+                Ok(())
+            })?;
+        self.symb_tab.pop_scope();
+        Ok(TyKind::Void)
     }
 
     /// Validates a conditional expression.
