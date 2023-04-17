@@ -134,7 +134,6 @@ impl CortexError {
             DiagnosticKind::Error,
             &ctx.fh,
             vec![(ctx.file_path().clone(), *expr_span)]
-            // some span needed here
         ).into()
     }
 
@@ -150,6 +149,32 @@ impl CortexError {
             DiagnosticKind::Error,
             &ctx.fh,
             vec![(ctx.file_path().clone(), tok.span)],
+        ).into()
+    }
+
+    /// Creates an error describing a mismatch between the expected number of arguments passed into
+    /// a function call and the actual number of arguments passed.
+    pub fn args_n_mismatch(ctx: &SessCtx, expected_n: usize, received_n: usize, span: FileSpan) -> CortexError {
+        let arg_str = match expected_n {
+            1 => "argument",
+            _ => "arguments"
+        };
+        Diagnostic::new_with_spans(
+            format!("expected {} {} but received {}", expected_n, arg_str, received_n),
+            DiagnosticKind::Error,
+            &ctx.fh,
+            vec![(ctx.file_path().clone(), span)]
+        ).into()
+    }
+
+    /// Creates an error describing an invalid invocation of an identifier, e.g. trying to call a
+    /// variable instead of a function.
+    pub fn illegal_ident_call(ctx: &SessCtx, span: FileSpan, conflict: &Ident) -> CortexError {
+        Diagnostic::new_with_spans(
+            format!("cannot invoke type {}", conflict.ty_kind()),
+            DiagnosticKind::Error,
+            &ctx.fh,
+            vec![(ctx.file_path().clone(), span)]
         ).into()
     }
 
