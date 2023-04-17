@@ -397,11 +397,17 @@ impl<'a> Parser<'_> {
     /// Parses a basic identifier or a function call if the identifier is followed by opening
     /// parenthesis.
     fn parse_ident_or_call(&mut self, ident: &String) -> Result<Expr> {
-        let ident_span = self.tok.span;
+        let mut expr_span = self.tok.span;
         self.advance()?; // skip id token
         let expr_kind = match self.tok.kind {
             TokenKind::BraceOpen(BraceKind::Paren) => {
+                let open_paren_span = self.tok.span;
                 self.advance()?; // skip opening parenthesis
+                let args = self.parse_comma_sep_expr()?;
+                let close_paren_span = self.tok.span;
+                self.eat(TokenKind::BraceClosed(BraceKind::Paren))?;
+                let ident_span = expr_span;
+                expr_span = open_paren_span.to(&close_paren_span);
                 ExprKind::Call(
                     Ident::new(
                         ident,
@@ -409,7 +415,7 @@ impl<'a> Parser<'_> {
                         IdentCtx::FuncCall,
                         ident_span,
                     ),
-                    self.parse_comma_sep_expr()?
+                    args,
                 )
             }
             _ => 
@@ -418,12 +424,12 @@ impl<'a> Parser<'_> {
                         ident,
                         TyKind::Lookup,
                         IdentCtx::Ref,
-                        ident_span,
+                        expr_span,
                     )
                 )
         };
 
-        Ok(Expr::new(expr_kind, ident_span))
+        Ok(Expr::new(expr_kind, expr_span))
     }
 
     /// Parses a comma separated list of expressions, such as expressions passed as arguments to
@@ -432,7 +438,7 @@ impl<'a> Parser<'_> {
         let mut exprs = Vec::new();
         loop {
             if let TokenKind::BraceClosed(BraceKind::Paren) = self.tok.kind {
-                self.advance()?; // skip closing parenthesis
+                // self.advance()?; // skip closing parenthesis
                 break;
             }
             exprs.push(Box::new(self.parse_expr()?));
