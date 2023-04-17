@@ -6,7 +6,8 @@ use std::collections::{
 };
 
 use crate::symbols::{ TyKind, IntSize, BinOpKind, UnaryOpKind };
-use crate::io::error::Result;
+use crate::io::error::{ Result, CortexError };
+use crate::io::file::{ FileSpan, FilePos };
 use crate::ast::{
     AstNode,
     Func,
@@ -17,17 +18,36 @@ use crate::ast::{
     CondKind,
     LoopKind,
     Ident,
-    IdentCtx,
 };
-use crate::io::error::CortexError;
 use crate::sess::SessCtx;
+
+#[derive(Clone)]
+struct IdentEntry {
+    pub ident: Ident,
+    pub kind: IdentEntryKind,
+}
+
+impl IdentEntry {
+    pub fn new(ident: Ident, kind: IdentEntryKind) -> IdentEntry {
+        IdentEntry {
+            kind,
+            ident,
+        }
+    }
+}
+
+#[derive(Clone)]
+enum IdentEntryKind {
+    Func(Vec<Ident>),
+    Var,
+}
 
 /// The symbol table object.
 struct SymbolTable {
     /// Global scope
-    global: HashMap<String, Ident>,
+    global: HashMap<String, IdentEntry>,
     /// Nested scopes
-    scopes: VecDeque<HashMap<String, Ident>>,
+    scopes: VecDeque<HashMap<String, IdentEntry>>,
 }
 
 impl SymbolTable {
@@ -58,7 +78,7 @@ impl SymbolTable {
     }
 
     /// Returns a mutable reference to the current scope.
-    fn current_scope(&mut self) -> &mut HashMap<String, Ident> {
+    fn current_scope(&mut self) -> &mut HashMap<String, IdentEntry> {
         self.scopes.front_mut()
             .unwrap_or_else(|| &mut self.global)
     }
@@ -67,7 +87,7 @@ impl SymbolTable {
     ///
     /// If the entry does not exist, `None` is returned. Otherwise, `Some` is returned containing a
     /// reference to the entry.
-    pub fn try_query(&self, ident: &Ident) -> Option<&Ident> {
+    pub fn try_query(&self, ident: &Ident) -> Option<&IdentEntry> {
         for scope in &self.scopes {
             if scope.contains_key(ident.raw()) {
                 return scope.get(ident.raw());
@@ -80,12 +100,13 @@ impl SymbolTable {
     ///
     /// If insertion fails, i.e., there exists a matching entry in the symbol table, `Some` is
     /// returned containing that entry. Otherwise, `None` signifies a successful insertion.
-    pub fn try_insert(&mut self, ident: &Ident) -> Option<Ident> {
-        if let Some(conflict) = self.try_query(ident) {
+    pub fn try_insert(&mut self, entry: IdentEntry) -> Option<IdentEntry> {
+        if let Some(conflict) = self.try_query(&entry.ident) {
             return Some(conflict.clone());
         }
-        if self.current_scope().try_insert(ident.raw().clone(), ident.clone()).is_err() {
-            Some(self.try_query(ident).unwrap().clone())
+        if self.current_scope().try_insert(entry.ident.raw().clone(), entry.clone()).is_err() {
+            // unwrapping is safe here (insert found a conflict, so we know it exists)
+            Some(self.try_query(&entry.ident).unwrap().clone())
         } else {
             None
         }
@@ -135,23 +156,50 @@ impl<'a> Validator<'_> {
     fn validate_func(&mut self, func: &mut Func) -> Result<TyKind> {
         // put func ident in parent's symbol table (before the function's symbol table is
         // initialized)
-        let ret_ty_kind = self.validate_ident(&mut func.ident)?;
+        let entry = IdentEntry::new(
+            func.ident.clone(),
+            IdentEntryKind::Func(func.params.clone())
+        );
+        self.symb_tab_insert(entry)?;
+            // return 
+        // self.symb_tab
         // initialize function's symbol table
         self.symb_tab.push_scope();
-        func.params.iter_mut()
+        func.params.iter()
             .try_for_each(|p| -> Result {
-                self.validate_ident(p)?;
-                Ok(())
+                let entry = IdentEntry::new(
+                    p.clone(),
+                    IdentEntryKind::Var,
+                );
+                self.symb_tab_insert(entry)
             })?;
         self.validate_expr(&mut func.body)?;
         self.symb_tab.pop_scope();
-        Ok(ret_ty_kind)
+        Ok(*func.ident.ty_kind())
+    }
+
+    fn symb_tab_insert(&mut self, entry: IdentEntry) -> Result {
+        match self.symb_tab.try_insert(entry.clone()) {
+            Some(conflict) => Err(CortexError::illegal_ident(&self.ctx, &entry.ident, Some(&conflict.ident)).into()),
+            None => Ok(()),
+        }
+    }
+
+    fn symb_tab_query(&mut self, ident: &mut Ident) -> Result<&IdentEntry> {
+        match self.symb_tab.try_query(ident) {
+            Some(def_entry) => {
+                ident.update_ty(def_entry.ident.ty_kind);
+                Ok(def_entry)
+            },
+            None => Err(CortexError::illegal_ident(&self.ctx, &ident, None).into()),
+        }
     }
 
     /// Validates a generic expression node.
     fn validate_expr(&mut self, expr: &mut Expr) -> Result<TyKind> {
+        let mut span = *expr.span();
         match expr.kind {
-            ExprKind::Id(ref mut ident) => self.validate_ident(ident),
+            ExprKind::Id(ref mut ident) => self.symb_tab_query(ident).and_then(|entry| Ok(*entry.ident.ty_kind())),
             ExprKind::Lit(ref lit_kind) => Ok(self.validate_lit(lit_kind)),
             ExprKind::Compound(ref mut children) => self.validate_compound(children),
             ExprKind::Binary(ref op_kind, ref mut lhs, ref mut rhs) => self.validate_bin_op(op_kind, lhs, rhs),
@@ -160,13 +208,54 @@ impl<'a> Validator<'_> {
             ExprKind::Loop(ref mut loop_kind) => self.validate_loop(loop_kind),
             ExprKind::Unary(ref unary_op_kind, ref mut expr) => self.validate_unary_op(unary_op_kind, expr),
             ExprKind::Call(ref mut ident, ref mut args) => {
-                let func_ret_ty = self.validate_ident(ident)?;
-                args.iter_mut()
-                    .try_for_each(|a| -> Result {
-                        self.validate_expr(a)?;
-                        Ok(())
-                    })?;
-                Ok(func_ret_ty)
+                let func_entry = self.symb_tab_query(ident)?.clone();
+                let func_ty_kind = *func_entry.ident.ty_kind();
+                match func_entry.kind {
+                    IdentEntryKind::Var =>
+                        return Err(CortexError::illegal_ident_call(&self.ctx, *expr.span(), &func_entry.ident).into()),
+                    IdentEntryKind::Func(expected_args) =>
+                        // Check if correct amount of params are passed
+                        if args.len() == expected_args.len() {
+                            // Check types of params
+                            args.iter_mut().zip(expected_args)
+                                .try_for_each(|(arg, expected_arg)| -> Result {
+                                    let arg_ty_kind = self.validate_expr(arg)?;
+                                    if arg_ty_kind != expected_arg.ty_kind {
+                                        Err(CortexError::incompat_types(&self.ctx, &expected_arg.ty_kind, &arg_ty_kind, arg.span()).into())
+                                    } else {
+                                        Ok(())
+                                    }
+                                })
+                        } else {
+                            // Capture certain arguments in underline depending on
+                            // missing/excessive arguments
+                            if expected_args.is_empty() {
+                                // Capture every argument in underline
+                                // Unwrapping safe, args is not empty
+                                let beg_span = args.first().unwrap().span();
+                                let end_span = args.last().unwrap().span();
+                                span = beg_span.to(end_span);
+                            }  else {
+                                if args.len() < expected_args.len() {
+                                    let pos = match args.last() {
+                                        // Point after last parameter of function call
+                                        Some(arg) => arg.span().end,
+                                        // Point after opening parenthesis of function call
+                                        None => FilePos::new(span.beg.line, span.beg.col+1),
+                                    };
+                                    span = FileSpan::one(pos);
+                                } else {
+                                    // Unwrapping safe, args.len() > expected_args.len()
+                                    let beg_span = args.get(expected_args.len()).unwrap().span();
+                                    // Unwrapping safe, args not empty
+                                    let end_span = args.last().unwrap().span();
+                                    span = beg_span.to(end_span);
+                                }
+                            }
+                            Err(CortexError::args_n_mismatch(&self.ctx, expected_args.len(), args.len(), span).into())
+                        },
+                }?;
+                Ok(func_ty_kind)
             }
         }
     }
@@ -225,41 +314,16 @@ impl<'a> Validator<'_> {
                                 return Err(CortexError::incompat_types(self.ctx, &ident.ty_kind, &rhs_ty_kind, expr.span()).into());
                             }
                         }
-                        self.validate_ident(ident)?;
+                        let entry = IdentEntry::new(
+                            ident.clone(),
+                            IdentEntryKind::Var,
+                        );
+                        self.symb_tab_insert(entry)?;
                         Ok(rhs_ty_kind)
                     }),
             _ => unimplemented!()
         }
     }
-
-    /// Determines, based on its context, if the identifier is valid.
-    ///
-    /// If the identifier is `x` and the context is [`IdentCtx::Ref`], the validator needs to make
-    /// sure `x` is an already defined symbol. If instead the context of `x` is [`IdentCtx::Def`],
-    /// for example, the symbol table needs updated with `x`.
-    fn validate_ident(&mut self, ident: &mut Ident) -> Result<TyKind> {
-        match ident.ctx() {
-            IdentCtx::Def
-                | IdentCtx::Param
-                | IdentCtx::FuncDef =>
-                    // ident.ty_kind should NEVER be TyKind::Infer here (handled in let statement
-                    // validation)
-                    match self.symb_tab.try_insert(ident) {
-                        Some(ref conflict) =>
-                            Err(CortexError::illegal_ident(&self.ctx, &ident, Some(conflict)).into()),
-                        None => Ok(ident.ty_kind),
-                    },
-            IdentCtx::Ref
-                | IdentCtx::FuncCall =>
-                    match self.symb_tab.try_query(ident) {
-                        Some(def_ident) => {
-                            ident.update_ty(def_ident.ty_kind);
-                            Ok(ident.ty_kind)
-                        },
-                        None => Err(CortexError::illegal_ident(&self.ctx, &ident, None).into()),
-                    },
-        }
-    } 
 
     /// Determines the type of a literal.
     fn validate_lit(&self, lit: &LitKind) -> TyKind {
