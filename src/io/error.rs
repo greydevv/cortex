@@ -6,7 +6,7 @@ use std::io::ErrorKind;
 use std::convert::From;
 
 use colored::Colorize;
-use clap::error::ContextKind;
+use clap::error::ErrorKind as ClapErrorKind;
 use clap::error::Error as ClapError;
 
 use crate::ast::{ Ident, IdentCtx };
@@ -24,22 +24,18 @@ pub struct CortexError(pub Vec<Diagnostic>);
 /// Converts an error raised from [`clap`](https://docs.rs/clap/latest/clap/) to a standard Cortex
 /// error.
 impl From<ClapError> for CortexError {
-    fn from(value: ClapError) -> CortexError {
-        let (kind, val) = value.context().nth(0).unwrap();
-        match kind {
-            ContextKind::InvalidArg =>
-                Diagnostic::new(
-                    format!("invalid argument '{}'", val),
-                    DiagnosticKind::Error,
-                ).into(),
-            _ => unimplemented!()
+    fn from(e: ClapError) -> CortexError {
+        match e.kind() {
+            _ => unimplemented!("clap-rs error to CortexError: {}", e.kind())
         }
     }
 }
 
-pub struct IOErrorWrapper<'a>(pub std::io::Error, pub &'a String);
+/// A wrapper around [`std::io::Error`] meant to associate the error with a file path.
+pub(in crate::io) struct IOErrorWrapper<'a>(pub std::io::Error, pub &'a String);
 
 impl From<IOErrorWrapper<'_>> for CortexError {
+    /// Effectively converts a [`std::io::Error`] associated with a file path into a `CortexError`.
     fn from (value: IOErrorWrapper) -> CortexError {
         let IOErrorWrapper(error, file_path) = value;
         let err_msg = match error.kind() {

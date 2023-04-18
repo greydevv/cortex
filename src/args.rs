@@ -18,18 +18,4 @@ pub fn parse_args() -> Result<ArgMatches> {
         )
         .try_get_matches()
         .map_err(|e| Box::new(CortexError::from(e)))
-            // Box::new(CortexError::ArgError("argument error".into()))
-            // let ctx = e.context();
-            // for (kind, val) in ctx {
-            //     match kind {
-            //         ContextKind::InvalidArg => {
-            //             let msg = format!("invalid argument: {}", val);
-            //             Err(Box::new(
-            //                 CortexError::ArgError()
-            //             ))
-            //         },
-            //         _ => todo!("handle arg error: {}", e)
-            //     }
-            // }
-        // )
 }
