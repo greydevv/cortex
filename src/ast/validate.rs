@@ -173,7 +173,21 @@ impl<'a> Validator<'_> {
                 );
                 self.symb_tab_insert(entry)
             })?;
-        self.validate_expr(&mut func.body)?;
+        let body_ret_ty = self.validate_expr(&mut func.body)?;
+        if body_ret_ty != *func.ident.ty_kind() {
+            // let ret_span = if let ExprKind::Compound(ref children, Some(break_idx)) = func.body.kind {
+            //     // span of return statement
+            // } else {
+            //     // something else here
+            // }
+            // return Err(CortexError::incompat_types(
+            //     &self.ctx,
+            //     &func.ident.ty_kind(),
+            //     &body_ret_ty,
+            //     func.ident.span(),
+            // ).into())
+            todo!("incorrect function return type error (need meaningful span)")
+        }
         self.symb_tab.pop_scope();
         Ok(*func.ident.ty_kind())
     }
