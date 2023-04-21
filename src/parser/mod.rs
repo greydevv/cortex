@@ -85,7 +85,8 @@ impl<'a> Parser<'_> {
     /// set of curly braces, `{` and `}`.
     fn parse_compound(&mut self) -> Result<Expr> {
         let mut children = Vec::new();
-        // this will be reset in the loop
+        let mut break_idx = None;
+        // This will be reset in the loop
         let mut span = self.tok.span;
         self.eat(TokenKind::BraceOpen(BraceKind::Curly))?;
         loop {
@@ -95,7 +96,14 @@ impl<'a> Parser<'_> {
                     self.eat(TokenKind::Delim(DelimKind::Scolon))?;
                     AstNode::Expr(expr)
                 },
-                TokenKind::Kwd(ref kwd_kind) => self.parse_kwd(kwd_kind)?,
+                TokenKind::Kwd(ref kwd_kind) => {
+                    // Remember the index at which the compound was broken out of, e.g., return,
+                    // break, etc.
+                    if *kwd_kind == KwdKind::Ret {
+                        break_idx = Some(children.len() as u32);
+                    }
+                    self.parse_kwd(kwd_kind)?
+                },
                 TokenKind::BraceClosed(BraceKind::Curly) => {
                     span = span.to(&self.tok.span);
                     self.advance()?;
@@ -105,7 +113,7 @@ impl<'a> Parser<'_> {
             };
             children.push(Box::new(child));
         }
-        Ok(Expr::new(ExprKind::Compound(children), span))
+        Ok(Expr::new(ExprKind::Compound(children, break_idx), span))
     }
 
     /// Parses an include statement, e.g., `include "some_file.cx"`.
