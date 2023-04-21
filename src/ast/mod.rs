@@ -157,7 +157,7 @@ pub enum ExprKind {
     /// Invocations (function calls).
     Call(Ident, Vec<Box<Expr>>),
     /// Collection of expressions (block).
-    Compound(Vec<Box<AstNode>>),
+    Compound(Vec<Box<AstNode>>, Option<u32>),
     /// Conditionals (if, else if, else).
     Cond(CondKind),
     /// Loops (while, for).
@@ -237,10 +237,10 @@ impl AstDebug for AstNode {
 impl AstDebug for Expr {
     fn debug(&self, indents: usize) -> String {
         let out_string = match &self.kind {
-            ExprKind::Compound(children) if children.len() == 0 =>
+            ExprKind::Compound(children, ..) if children.len() == 0 =>
                 // block is empty
                 String::new(),
-            ExprKind::Compound(children) =>
+            ExprKind::Compound(children, ..) =>
                 format!("\n{}",
                     children.iter()
                     // need to check if child is not last
@@ -263,6 +263,11 @@ impl AstDebug for Expr {
                             ident.ty_kind(),
                             expr.debug(indents+2),
                         ),
+                    StmtKind::Ret(expr) =>
+                        match expr {
+                            Some(expr) => format!("\n{}", expr.debug(indents+2)),
+                            None => TyKind::Void.to_string(),
+                        },
                     _ => unimplemented!()
                 };
                 format!("\n{}{}{}", "  ".repeat(indents+1), stmt_kind, stmt_string)
