@@ -6,6 +6,7 @@ use std::io::ErrorKind;
 use std::convert::From;
 
 use colored::Colorize;
+#[allow(unused_imports)]
 use clap::error::ErrorKind as ClapErrorKind;
 use clap::error::Error as ClapError;
 
