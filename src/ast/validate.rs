@@ -201,7 +201,7 @@ impl<'a> Validator<'_> {
         match expr.kind {
             ExprKind::Id(ref mut ident) => self.symb_tab_query(ident).and_then(|entry| Ok(*entry.ident.ty_kind())),
             ExprKind::Lit(ref lit_kind) => Ok(self.validate_lit(lit_kind)),
-            ExprKind::Compound(ref mut children) => self.validate_compound(children),
+            ExprKind::Compound(ref mut children, break_idx) => self.validate_compound(children, break_idx),
             ExprKind::Binary(ref op_kind, ref mut lhs, ref mut rhs) => self.validate_bin_op(op_kind, lhs, rhs),
             ExprKind::Stmt(ref mut stmt_kind) => self.validate_stmt(stmt_kind),
             ExprKind::Cond(ref mut cond_kind) => self.validate_cond(cond_kind),
@@ -261,15 +261,24 @@ impl<'a> Validator<'_> {
     }
 
     /// Validates a block.
-    fn validate_compound(&mut self, children: &mut Vec<Box<AstNode>>) -> Result<TyKind> {
+    fn validate_compound(&mut self, children: &mut Vec<Box<AstNode>>, break_idx: Option<u32>) -> Result<TyKind> {
         self.symb_tab.push_scope();
+        let mut ret_kind = TyKind::Void;
         children.iter_mut()
-            .try_for_each(|c| -> Result {
-                self.validate_node(c)?;
+            .enumerate()
+            .try_for_each(|(i, child)| -> Result {
+                let ty_kind = self.validate_node(child)?;
+                if let Some(break_idx) = break_idx {
+                    if break_idx == i as u32 {
+                        ret_kind = ty_kind;
+                    }
+                }
                 Ok(())
             })?;
         self.symb_tab.pop_scope();
-        Ok(TyKind::Void)
+        // TODO: Warn user if there is code after breaking statement by using this condition:
+        // `if break_idx < (children.len() as u32) - 1`
+        Ok(ret_kind)
     }
 
     /// Validates a conditional expression.
@@ -321,7 +330,12 @@ impl<'a> Validator<'_> {
                         self.symb_tab_insert(entry)?;
                         Ok(rhs_ty_kind)
                     }),
-            _ => unimplemented!()
+            StmtKind::Ret(ref mut expr) =>
+                match expr {
+                    Some(expr) => self.validate_expr(expr),
+                    None => Ok(TyKind::Void),
+                },
+            _ => unimplemented!("validation for {}", stmt_kind),
         }
     }
 
