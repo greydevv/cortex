@@ -99,7 +99,7 @@ impl<'a> Parser<'_> {
                 TokenKind::Kwd(ref kwd_kind) => {
                     // Remember the index at which the compound was broken out of, e.g., return,
                     // break, etc.
-                    if *kwd_kind == KwdKind::Ret {
+                    if *kwd_kind == KwdKind::Ret && break_idx.is_none() {
                         break_idx = Some(children.len() as u32);
                     }
                     self.parse_kwd(kwd_kind)?
