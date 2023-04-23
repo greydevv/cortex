@@ -265,10 +265,15 @@ impl<'a> Parser<'_> {
     fn parse_ret(&mut self) -> Result<Expr> {
         let ret_kwd_span = self.tok.span;
         self.advance()?; // skip 'ret' kwd
-        let expr = self.parse_expr()?;
-        let span = ret_kwd_span.to(expr.span());
+        let (expr, span) = if let TokenKind::Delim(DelimKind::Scolon) = self.tok.kind {
+            (None, ret_kwd_span)
+        } else {
+            let expr = Box::new(self.parse_expr()?);
+            let span = ret_kwd_span.to(expr.span());
+            (Some(expr), span)
+        };
         self.eat(TokenKind::Delim(DelimKind::Scolon))?;
-        Ok(Expr::new(ExprKind::Stmt(StmtKind::Ret(Some(Box::new(expr)))), span))
+        Ok(Expr::new(ExprKind::Stmt(StmtKind::Ret(expr)), span))
     }
 
     /// Parses a let statement.
