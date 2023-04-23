@@ -86,6 +86,14 @@ impl FileSpan {
             end: other.end.clone(),
         }
     }
+
+    /// Creates a new file span of length one beginning at the end of the current file span.
+    pub fn end(&self) -> FileSpan {
+        FileSpan {
+            beg: FilePos { line: self.end.line, col: self.end.col-1 },
+            end: self.end.clone(),
+        }
+    }
 }
 
 impl Len for FileSpan {
