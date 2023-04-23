@@ -154,16 +154,14 @@ impl<'a> Validator<'_> {
 
     /// Validates a function node.
     fn validate_func(&mut self, func: &mut Func) -> Result<TyKind> {
-        // put func ident in parent's symbol table (before the function's symbol table is
+        // Put func ident in parent's symbol table (before the function's symbol table is
         // initialized)
         let entry = IdentEntry::new(
             func.ident.clone(),
             IdentEntryKind::Func(func.params.clone())
         );
         self.symb_tab_insert(entry)?;
-            // return 
-        // self.symb_tab
-        // initialize function's symbol table
+        // Initialize function's symbol table
         self.symb_tab.push_scope();
         func.params.iter()
             .try_for_each(|p| -> Result {
@@ -174,19 +172,26 @@ impl<'a> Validator<'_> {
                 self.symb_tab_insert(entry)
             })?;
         let body_ret_ty = self.validate_expr(&mut func.body)?;
+        // Check if the function's return type was satisfied
         if body_ret_ty != *func.ident.ty_kind() {
-            // let ret_span = if let ExprKind::Compound(ref children, Some(break_idx)) = func.body.kind {
-            //     // span of return statement
-            // } else {
-            //     // something else here
-            // }
-            // return Err(CortexError::incompat_types(
-            //     &self.ctx,
-            //     &func.ident.ty_kind(),
-            //     &body_ret_ty,
-            //     func.ident.span(),
-            // ).into())
-            todo!("incorrect function return type error (need meaningful span)")
+            let ret_span = if let ExprKind::Compound(ref children, Some(break_idx)) = func.body.kind {
+                if let AstNode::Expr(ref expr) = **children.get(break_idx as usize).unwrap() {
+                    // Underline the return statement
+                    expr.span().clone()
+                } else {
+                    // Temporary panic
+                    panic!("This is a temporary panic statement that should never run. If this runs, that means that the compound's break statement was found to be a function. This will be removed when the AST structure is redefined.")
+                }
+            } else {
+                // Underline the closing brace to show a missing return statement
+                func.body.span().end()
+            };
+            return Err(CortexError::incompat_types(
+                &self.ctx,
+                &func.ident.ty_kind(),
+                &body_ret_ty,
+                &ret_span,
+            ).into())
         }
         self.symb_tab.pop_scope();
         Ok(*func.ident.ty_kind())
