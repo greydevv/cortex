@@ -164,6 +164,51 @@ pub enum ExprKind {
     Loop(LoopKind),
 }
 
+#[allow(dead_code)]
+struct Module {
+    name: String,
+    stmts: Vec<Stmt>,
+}
+
+impl Module {
+    #[allow(dead_code)]
+    pub fn new(name: String) -> Module {
+        Module {
+            name,
+            stmts: Vec::new(),
+        }
+    }
+}
+
+#[allow(dead_code)]
+enum Stmt {
+    /// Include statement.
+    Incl(Module),
+    /// Return statement.
+    Ret(Expr),
+    /// Let statement.
+    Let(Ident, Expr),
+    /// While loop statement.
+    ///
+    /// If the expression is omitted from a while loop, the loop will run forever. This is
+    /// semantically the same as `while (true)` or just `loop` in Rust.
+    While(Option<Expr>, Compound),
+    /// If or else-if statement.
+    If(Expr, Compound, Option<Box<Stmt>>),
+    /// Else statement.
+    Else(Compound),
+    /// A collection of statements.
+    Compound(Compound),
+    /// Function definition.
+    Func(Func),
+}
+
+#[allow(dead_code)]
+struct Compound {
+    stmts: Vec<Stmt>,
+    break_idx: Option<usize>,
+}
+
 /// The various kinds of loops.
 #[derive(Clone, strum_macros::Display)]
 pub enum LoopKind {
