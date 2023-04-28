@@ -9,14 +9,14 @@ use crate::symbols::{ TyKind, IntSize, BinOpKind, UnaryOpKind };
 use crate::io::error::{ Result, CortexError };
 use crate::io::file::{ FileSpan, FilePos };
 use crate::ast::{
-    AstNode,
+    Module,
     Func,
     Expr,
     ExprKind,
+    Compound,
+    Stmt,
     StmtKind,
     LitKind,
-    CondKind,
-    LoopKind,
     Ident,
 };
 use crate::sess::SessCtx;
@@ -136,20 +136,12 @@ impl<'a> Validator<'_> {
 
     /// The main driver for the validator. This method runs over the AST and validates it, mainly
     /// by type checking.
-    pub fn validate(&mut self, tree: &mut Vec<Box<AstNode>>) -> Result {
-        tree.iter_mut()
+    pub fn validate(&mut self, module: &mut Module) -> Result {
+        module.stmts_mut().iter_mut()
             .try_for_each(|node| {
-                self.validate_node(node)?;
+                self.validate_stmt(node)?;
                 Ok(())
             })
-    }
-
-    /// Validates a generic AST node.
-    fn validate_node(&mut self, node: &mut Box<AstNode>) -> Result<TyKind> {
-        match **node {
-            AstNode::Func(ref mut func) => self.validate_func(func),
-            AstNode::Expr(ref mut expr) => self.validate_expr(expr),
-        }
     }
 
     /// Validates a function node.
@@ -171,20 +163,13 @@ impl<'a> Validator<'_> {
                 );
                 self.symb_tab_insert(entry)
             })?;
-        let body_ret_ty = self.validate_expr(&mut func.body)?;
+        let body_ret_ty = self.validate_compound(&mut func.body)?;
         // Check if the function's return type was satisfied
         if body_ret_ty != *func.ident.ty_kind() {
-            let ret_span = if let ExprKind::Compound(ref children, Some(break_idx)) = func.body.kind {
-                if let AstNode::Expr(ref expr) = **children.get(break_idx as usize).unwrap() {
-                    // Underline the return statement
-                    expr.span().clone()
-                } else {
-                    // Temporary panic
-                    panic!("This is a temporary panic statement that should never run. If this runs, that means that the compound's break statement was found to be a function. This will be removed when the AST structure is redefined.")
-                }
-            } else {
+            let ret_span = match func.body.get_break_stmt() {
+                Some(ref stmt) => stmt.span(),
                 // Underline the closing brace to show a missing return statement
-                func.body.span().end()
+                None => todo!("implement span for Compound struct") // func.body.span().end()
             };
             return Err(CortexError::incompat_types(
                 &self.ctx,
@@ -220,11 +205,7 @@ impl<'a> Validator<'_> {
         match expr.kind {
             ExprKind::Id(ref mut ident) => self.symb_tab_query(ident).and_then(|entry| Ok(*entry.ident.ty_kind())),
             ExprKind::Lit(ref lit_kind) => Ok(self.validate_lit(lit_kind)),
-            ExprKind::Compound(ref mut children, break_idx) => self.validate_compound(children, break_idx),
             ExprKind::Binary(ref op_kind, ref mut lhs, ref mut rhs) => self.validate_bin_op(op_kind, lhs, rhs),
-            ExprKind::Stmt(ref mut stmt_kind) => self.validate_stmt(stmt_kind),
-            ExprKind::Cond(ref mut cond_kind) => self.validate_cond(cond_kind),
-            ExprKind::Loop(ref mut loop_kind) => self.validate_loop(loop_kind),
             ExprKind::Unary(ref unary_op_kind, ref mut expr) => self.validate_unary_op(unary_op_kind, expr),
             ExprKind::Call(ref mut ident, ref mut args) => {
                 let func_entry = self.symb_tab_query(ident)?.clone();
@@ -280,15 +261,16 @@ impl<'a> Validator<'_> {
     }
 
     /// Validates a block.
-    fn validate_compound(&mut self, children: &mut Vec<Box<AstNode>>, break_idx: Option<u32>) -> Result<TyKind> {
+    fn validate_compound(&mut self, compound: &mut Compound) -> Result<TyKind> {
         self.symb_tab.push_scope();
         let mut ret_kind = TyKind::Void;
-        children.iter_mut()
+        let break_idx = compound.get_break_idx();
+        compound.stmts_mut().iter_mut()
             .enumerate()
             .try_for_each(|(i, child)| -> Result {
-                let ty_kind = self.validate_node(child)?;
+                let ty_kind = self.validate_stmt(child)?;
                 if let Some(break_idx) = break_idx {
-                    if break_idx == i as u32 {
+                    if break_idx == i{
                         ret_kind = ty_kind;
                     }
                 }
@@ -300,36 +282,9 @@ impl<'a> Validator<'_> {
         Ok(ret_kind)
     }
 
-    /// Validates a conditional expression.
-    fn validate_cond(&mut self, cond_kind: &mut CondKind) -> Result<TyKind> {
-        match cond_kind {
-            CondKind::If(ref mut expr, ref mut body, ref mut other) => {
-                let if_ty_kind = self.expect_bool_from(expr)
-                    .and_then(|_| self.validate_expr(body))?;
-                match other {
-                    Some(other) => self.validate_expr(other),
-                    None => Ok(if_ty_kind),
-                }
-            },
-            CondKind::Else(ref mut body) => self.validate_expr(body),
-        }
-    }
-
-    /// Validates a loop.
-    fn validate_loop(&mut self, loop_kind: &mut LoopKind) -> Result<TyKind> {
-        match loop_kind {
-            LoopKind::While(ref mut expr, ref mut body) =>
-                match expr {
-                    Some(expr) => self.expect_bool_from(expr),
-                    None => Ok(())
-                }
-                .and_then(|_| self.validate_expr(body))
-        }
-    }
-
     /// Validates a statement.
-    fn validate_stmt(&mut self, stmt_kind: &mut StmtKind) -> Result<TyKind> {
-        match stmt_kind {
+    fn validate_stmt(&mut self, stmt: &mut Stmt) -> Result<TyKind> {
+        match stmt.kind {
             StmtKind::Let(ref mut ident, ref mut expr) =>
                 // make sure the variable being defined isn't used in its own definition by
                 // validating the right-hand side of the equals sign first
@@ -354,8 +309,33 @@ impl<'a> Validator<'_> {
                     Some(expr) => self.validate_expr(expr),
                     None => Ok(TyKind::Void),
                 },
-            _ => unimplemented!("validation for {}", stmt_kind),
+            StmtKind::Func(ref mut func) => self.validate_func(func),
+            StmtKind::Expr(ref mut expr) => self.validate_expr(expr),
+            StmtKind::If(ref mut expr, ref mut body, ref mut other) => self.validate_if(expr, body, other),
+            StmtKind::Else(ref mut body) => self.validate_compound(body),
+            StmtKind::While(ref mut expr, ref mut body) => self.validate_while(expr, body),
+            StmtKind::Compound(ref mut compound) => self.validate_compound(compound),
+            StmtKind::Incl(..) => todo!("Validation for StmtKind::Incl"),
         }
+    }
+
+    /// Validates a while loop.
+    fn validate_while(&mut self, expr: &mut Option<Expr>, body: &mut Compound) -> Result<TyKind> {
+        // Loop condition is optional. If not supplied, loop will run forever until broken.
+        if let Some(expr) = expr {
+            self.expect_bool_from(expr)?;
+        }
+        self.validate_compound(body)
+    }
+
+    /// Validates an if (or else-if) statement.
+    fn validate_if(&mut self, expr: &mut Expr, body: &mut Compound, other: &mut Option<Box<Stmt>>) -> Result<TyKind> {
+        self.expect_bool_from(expr)?;
+        let ret_ty_kind = self.validate_compound(body)?;
+        if let Some(else_if_or_else) = other {
+            self.validate_stmt(else_if_or_else)?;
+        }
+        Ok(ret_ty_kind)
     }
 
     /// Determines the type of a literal.
