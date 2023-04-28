@@ -83,13 +83,6 @@ impl Ident {
     }
 }
 
-/// The AST node object.
-#[derive(Clone, strum_macros::Display)]
-pub enum AstNode {
-    Func(Func),
-    Expr(Expr),
-}
-
 /// The AST function variant.
 #[derive(Clone)]
 pub struct Func {
@@ -313,15 +306,6 @@ impl Indent {
 /// Provides a way to debug the AST by obtaining a string representation.
 trait AstDebug {
     fn debug(&self, indent: Indent) -> String;
-}
-
-impl AstDebug for AstNode {
-    fn debug(&self, indent: Indent) -> String {
-        match self {
-            AstNode::Func(func) => func.debug(indent),
-            AstNode::Expr(expr) => expr.debug(indent),
-        }
-    }
 }
 
 impl AstDebug for Module {
