@@ -7,6 +7,21 @@ use std::io::Read;
 use crate::symbols::Len;
 use crate::io::error::{ Result, CortexError, IOErrorWrapper };
 
+/// The object representing a file path.
+pub struct FilePath(String);
+
+impl FilePath {
+    /// Creates a new file path object.
+    pub fn new(file_path: String) -> FilePath {
+        FilePath(file_path)
+    }
+
+    /// Obtain a reference to the file path.
+    pub fn raw(&self) -> &String {
+        &self.0
+    }
+}
+
 /// The object representing a source file.
 #[derive(Debug, Clone)]
 pub struct FileHandler {
