@@ -456,7 +456,6 @@ impl AstDebug for Expr {
                     self.kind,
                     ident.raw(),
                     args.iter()
-                    // need to check if child is not last
                         .enumerate()
                         .map(|(i, arg)| -> String {
                             if i == args.len() - 1 { 
@@ -475,7 +474,6 @@ impl AstDebug for Compound {
     fn debug(&self, indent: Indent) -> String {
         format!("\n{}",
             self.stmts.iter()
-            // need to check if child is not last
                 .enumerate()
                 .map(|(i, child)| -> String {
                     if i == self.stmts.len() - 1 { 
