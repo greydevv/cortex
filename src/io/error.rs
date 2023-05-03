@@ -11,7 +11,7 @@ use clap::error::ErrorKind as ClapErrorKind;
 use clap::error::Error as ClapError;
 
 use crate::ast::{ Ident, IdentCtx };
-use crate::io::file::{ FileHandler, FileSpan };
+use crate::io::file::{ FileHandler, FilePath, FileSpan };
 use crate::symbols::{ Token, Len, TyKind };
 use crate::sess::SessCtx;
 
@@ -33,7 +33,7 @@ impl From<ClapError> for CortexError {
 }
 
 /// A wrapper around [`std::io::Error`] meant to associate the error with a file path.
-pub(in crate::io) struct IOErrorWrapper<'a>(pub std::io::Error, pub &'a String);
+pub(in crate::io) struct IOErrorWrapper<'a>(pub std::io::Error, pub &'a FilePath);
 
 impl From<IOErrorWrapper<'_>> for CortexError {
     /// Effectively converts a [`std::io::Error`] associated with a file path into a `CortexError`.
@@ -287,7 +287,7 @@ pub struct Diagnostic {
     /// The kind of diagnostic.
     kind: DiagnosticKind,
     /// Optional positions in source code.
-    spans: Option<Vec<(String, String, FileSpan)>>,
+    spans: Option<Vec<(FilePath, String, FileSpan)>>,
 }
 
 
@@ -302,7 +302,7 @@ impl Diagnostic {
     }
 
     /// Creates a new diagnostic with associated source code.
-    pub fn new_with_spans(msg: String, kind: DiagnosticKind, fh: &FileHandler, spans: Vec<(String, FileSpan)>) -> Diagnostic {
+    pub fn new_with_spans(msg: String, kind: DiagnosticKind, fh: &FileHandler, spans: Vec<(FilePath, FileSpan)>) -> Diagnostic {
         let mut spans_assoc = Vec::new();
         for (file_path, span) in spans {
             // TODO: Need to be careful here. Use of lines.nth in the format macro will consume

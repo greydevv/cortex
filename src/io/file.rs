@@ -8,12 +8,13 @@ use crate::symbols::Len;
 use crate::io::error::{ Result, CortexError, IOErrorWrapper };
 
 /// The object representing a file path.
+#[derive(PartialEq, Debug, Clone)]
 pub struct FilePath(String);
 
 impl FilePath {
     /// Creates a new file path object.
-    pub fn new(file_path: String) -> FilePath {
-        FilePath(file_path)
+    pub fn new(file_path: &str) -> FilePath {
+        FilePath(file_path.to_string())
     }
 
     /// Obtain a reference to the file path.
@@ -22,17 +23,23 @@ impl FilePath {
     }
 }
 
+impl fmt::Display for FilePath {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "{}", self.0)
+    }
+}
+
 /// The object representing a source file.
 #[derive(Debug, Clone)]
 pub struct FileHandler {
-    file_path: String,
+    file_path: FilePath,
     src: String,
 }
 
 impl FileHandler {
     /// Creates a new file handler given the file path.
-    pub fn new(file_path: String) -> Result<FileHandler> {
-        let mut f = File::open(&file_path).map_err(|e| CortexError::from(IOErrorWrapper(e, &file_path)))?;
+    pub fn new(file_path: FilePath) -> Result<FileHandler> {
+        let mut f = File::open(&file_path.to_string()).map_err(|e| CortexError::from(IOErrorWrapper(e, &file_path)))?;
         let mut src = String::new();
         f.read_to_string(&mut src).map_err(|e| CortexError::from(IOErrorWrapper(e, &file_path)))?;
         Ok(FileHandler {
@@ -47,7 +54,7 @@ impl FileHandler {
     }
 
     /// Gets the file path.
-    pub fn file_path(&self) -> &String {
+    pub fn file_path(&self) -> &FilePath {
         &self.file_path
     }
 }
@@ -162,10 +169,16 @@ mod tests {
         tests::assert_diags
     };
 
+    impl FilePath {
+        pub fn pseudo_fp() -> FilePath {
+            FilePath(String::new())
+        }
+    }
+
     impl FileHandler {
         pub fn pseudo_fh(src: &str) -> FileHandler {
             FileHandler {
-                file_path: String::new(),
+                file_path: FilePath::pseudo_fp(),
                 src: src.to_string(),
             }
         }
@@ -173,7 +186,7 @@ mod tests {
 
     #[test]
     fn open_existing_file() -> Result {
-        let _result = FileHandler::new(String::from("samples/debug.cx"))?;
+        let _result = FileHandler::new(FilePath::new("samples/debug.cx"))?;
         Ok(())
     }
 
@@ -185,7 +198,7 @@ mod tests {
                 DiagnosticKind::Error,
             )
         ];
-        let result = FileHandler::new(String::from("iamsomenonexistentfile"));
+        let result = FileHandler::new(FilePath::new("iamsomenonexistentfile"));
         
         assert_diags(result, expected_diags);
     }

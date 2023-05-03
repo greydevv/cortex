@@ -1,7 +1,7 @@
 //! Compilation driver.
 
 use crate::io::error::Result;
-use crate::io::file::FileHandler;
+use crate::io::file::{ FileHandler, FilePath };
 use crate::parser::Parser;
 use crate::lexer::Lexer;
 use crate::args::parse_args;
@@ -21,7 +21,7 @@ impl SessCtx {
     }
 
     /// Gets the file path of the file being compiled.
-    pub fn file_path(&self) -> String {
+    pub fn file_path(&self) -> FilePath {
         self.fh.file_path().clone()
     }
 }
@@ -38,7 +38,7 @@ impl Session {
     fn compile() -> Result {
         let args = parse_args()?;
         let ctx = SessCtx::new(
-            FileHandler::new(String::from("samples/debug.cx"))?
+            FileHandler::new(FilePath::new("samples/debug.cx"))?
         );
         if args.get_flag("only-display-tokens") {
             return Session::only_lexer_tokens(&ctx);
