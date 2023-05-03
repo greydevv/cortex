@@ -308,21 +308,30 @@ trait AstDebug {
     fn debug(&self, indent: Indent) -> String;
 }
 
+fn debug_vec<T: AstDebug + Sized>(v: &Vec<T>, indent: Indent) -> String {
+    if v.is_empty() {
+        return String::new();
+    }
+    format!("\n{}",
+        v.iter()
+            .enumerate()
+            .map(|(i, e)| -> String {
+                if i == v.len() - 1 {
+                    e.debug(indent.clone())
+                } else {
+                    format!("{}\n", e.debug(indent.clone()))
+                }
+            })
+            .collect::<String>()
+    )
+}
+
 impl AstDebug for Module {
     fn debug(&self, indent: Indent) -> String {
-        format!("{}Module({})\n{}",
+        format!("{}Module({}){}",
             indent,
             self.name,
-            self.stmts.iter()
-                .enumerate()
-                .map(|(i, child)| -> String {
-                    if i == self.stmts.len() - 1 { 
-                        child.debug(indent.plus())
-                    } else { 
-                        format!("{}\n", child.debug(indent.plus()))
-                    }
-                })
-                .collect::<String>()
+            debug_vec(&self.stmts, indent.clone()),
         )
     }
 }
@@ -330,7 +339,11 @@ impl AstDebug for Module {
 impl AstDebug for Stmt {
     fn debug(&self, indent: Indent) -> String {
         match &self.kind {
-            StmtKind::Incl(ref file_path) => format!("{}({})", self.kind, file_path),
+            StmtKind::Incl(ref file_path) =>
+                format!("{}({})",
+                    self.kind,
+                    file_path
+                ),
             StmtKind::Func(ref func) =>
                 format!("{}{}{}",
                     indent,
@@ -356,10 +369,10 @@ impl AstDebug for Stmt {
                     None => format!("{}(void)", self.kind),
                 },
             StmtKind::Expr(ref expr) => expr.debug(indent),
-            StmtKind::Compound(ref compound) =>
+            StmtKind::Compound(ref c) =>
                 format!("{}\n{}",
                     self.kind,
-                    compound.debug(indent.plus())
+                    c.debug(indent.plus())
                 ),
             StmtKind::While(ref expr, ref body) =>
                 match expr {
@@ -371,7 +384,8 @@ impl AstDebug for Stmt {
                             body.debug(indent.plus())
                         ),
                     None =>
-                        format!("{}(forever){}",
+                        format!("{}{}(forever){}",
+                            indent,
                             self.kind,
                             body.debug(indent.plus())
                         ),
@@ -443,8 +457,8 @@ impl AstDebug for Expr {
                     ident.ty_kind(),
                     ident.ctx(),
                 ),
-            ExprKind::Call(ident, args) if args.len() == 0 =>
-                // no args
+            ExprKind::Call(ident, args) if args.is_empty() =>
+                // No arguments
                 format!("{}{}({})",
                     indent,
                     self.kind,
@@ -472,18 +486,7 @@ impl AstDebug for Expr {
 
 impl AstDebug for Compound {
     fn debug(&self, indent: Indent) -> String {
-        format!("\n{}",
-            self.stmts.iter()
-                .enumerate()
-                .map(|(i, child)| -> String {
-                    if i == self.stmts.len() - 1 { 
-                        child.debug(indent.clone())
-                    } else { 
-                        format!("{}\n", child.debug(indent.clone()))
-                    }
-                })
-                .collect::<String>()
-        )
+        debug_vec(&self.stmts, indent)
     }
 }
 
