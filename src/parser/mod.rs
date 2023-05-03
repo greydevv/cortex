@@ -6,17 +6,18 @@ use crate::io::error::{
     Diagnostic,
     DiagnosticKind
 };
+use crate::io::file::FileSpan;
 use crate::lexer::Lexer;
 use crate::ast::{
-    AstNode,
+    Compound,
+    Module,
+    Stmt,
     Func,
     Expr,
     Ident,
     ExprKind,
     StmtKind,
     IdentCtx,
-    CondKind,
-    LoopKind,
 };
 use crate::symbols::{
     Token,
@@ -58,18 +59,16 @@ impl<'a> Parser<'_> {
     }
 
     /// The main driver of the parser. This method parses the given file and returns its Abstract Syntax Tree (AST).
-    pub fn parse(&mut self) -> Result<Vec<Box<AstNode>>> {
-        let mut tree = Vec::new();
+    pub fn parse(&mut self) -> Result<Module> {
+        let mut module = Module::new(self.ctx.file_path());
         while !self.tok.is_eof() {
             if let TokenKind::Kwd(kwd_kind) = &self.tok.kind {
                 let child = match kwd_kind.clone() {
-                    KwdKind::Include => 
-                        AstNode::Expr(self.parse_include()?),
-                    KwdKind::Func =>
-                        AstNode::Func(self.parse_func()?),
+                    KwdKind::Include => self.parse_include()?,
+                    KwdKind::Func => self.parse_func()?,
                     _ => unimplemented!("error message for bad start keyword: '{}'", kwd_kind)
                 };
-                tree.push(Box::new(child));
+                module.add_node(child);
             } else {
                 return Err(CortexError::expected_but_got(
                     &self.ctx,
@@ -78,14 +77,13 @@ impl<'a> Parser<'_> {
                 ).into());
             }
         }
-        Ok(tree)
+        Ok(module)
     }
 
     /// Parses a compound expression, i.e., a collection of statements and/or expressions inside a
     /// set of curly braces, `{` and `}`.
-    fn parse_compound(&mut self) -> Result<Expr> {
-        let mut children = Vec::new();
-        let mut break_idx = None;
+    fn parse_compound(&mut self) -> Result<(Compound, FileSpan)> {
+        let mut compound = Compound::new();
         // This will be reset in the loop
         let mut span = self.tok.span;
         self.eat(TokenKind::BraceOpen(BraceKind::Curly))?;
@@ -93,14 +91,15 @@ impl<'a> Parser<'_> {
             let child = match self.tok.kind.clone() {
                 TokenKind::Id(_) | TokenKind::Lit(_) => {
                     let expr = self.parse_expr()?;
+                    let expr_span = *expr.span();
                     self.eat(TokenKind::Delim(DelimKind::Scolon))?;
-                    AstNode::Expr(expr)
+                    Stmt::new(StmtKind::Expr(expr), expr_span)
                 },
                 TokenKind::Kwd(ref kwd_kind) => {
                     // Remember the index at which the compound was broken out of, e.g., return,
                     // break, etc.
-                    if *kwd_kind == KwdKind::Ret && break_idx.is_none() {
-                        break_idx = Some(children.len() as u32);
+                    if *kwd_kind == KwdKind::Ret && compound.get_break_idx().is_none() {
+                        compound.set_break_idx(compound.stmts().len());
                     }
                     self.parse_kwd(kwd_kind)?
                 },
@@ -111,19 +110,17 @@ impl<'a> Parser<'_> {
                 }
                 _ => unimplemented!("DEV ERROR: NOT SURE HOW TO PROCEED ON TOKEN: {}", self.tok),
             };
-            children.push(Box::new(child));
+            compound.add_stmt(child);
         }
-        Ok(Expr::new(ExprKind::Compound(children, break_idx), span))
+        Ok((compound, span))
     }
 
     /// Parses an include statement, e.g., `include "some_file.cx"`.
-    fn parse_include(&mut self) -> Result<Expr> {
+    fn parse_include(&mut self) -> Result<Stmt> {
         let incl_kwd_span = self.tok.span;
         self.advance()?; // skip 'include' kwd
         if let TokenKind::Lit(LitKind::Str(_)) = self.tok.kind {
-            let incl = Expr::new(ExprKind::Stmt(
-                StmtKind::Incl(self.tok.value())
-            ), incl_kwd_span.to(&self.tok.span));
+            let incl = Stmt::new(StmtKind::Incl(self.tok.value()), incl_kwd_span.to(&self.tok.span));
             self.advance()?; // skip string
             self.eat(TokenKind::Delim(DelimKind::Scolon))?;
             Ok(incl)
@@ -144,10 +141,10 @@ impl<'a> Parser<'_> {
     ///
     /// If the parser encounters the `if` keyword, it will continue by attempting to parse an
     /// if/else if/else statement.
-    fn parse_kwd(&mut self, kwd_kind: &KwdKind) -> Result<AstNode> {
+    fn parse_kwd(&mut self, kwd_kind: &KwdKind) -> Result<Stmt> {
         let node = match *kwd_kind {
             // early return for function
-            KwdKind::Func => return Ok(AstNode::Func(self.parse_func()?)),
+            KwdKind::Func => self.parse_func()?,
             KwdKind::Include => self.parse_include()?,
             KwdKind::Let => self.parse_let()?,
             KwdKind::Ret => self.parse_ret()?,
@@ -173,26 +170,24 @@ impl<'a> Parser<'_> {
             KwdKind::While => self.parse_while()?,
             KwdKind::For => unimplemented!("parsing of for loop"),
         };
-        Ok(AstNode::Expr(node))
+        Ok(node)
     }
 
     /// Parses a while loop.
-    fn parse_while(&mut self) -> Result<Expr> {
+    fn parse_while(&mut self) -> Result<Stmt> {
         let while_kwd_span = self.tok.span;
         self.advance()?; // skip 'while' kwd
         let expr = match self.tok.kind {
             TokenKind::BraceOpen(BraceKind::Curly) => None,
-            _ => Some(Box::new(self.parse_expr()?)),
+            _ => Some(self.parse_expr()?),
         };
-        let body = self.parse_compound()?;
-        let span = while_kwd_span.to(body.span());
-        Ok(Expr::new(ExprKind::Loop(
-            LoopKind::While(expr, Box::new(body))
-        ), span))
+        let (body, body_span) = self.parse_compound()?;
+        let span = while_kwd_span.to(&body_span);
+        Ok(Stmt::new(StmtKind::While(expr, body), span))
     }
 
     /// Parses an if/else if/else statement.
-    fn parse_if(&mut self) -> Result<Expr> {
+    fn parse_if(&mut self) -> Result<Stmt> {
         let if_kwd_span = self.tok.span;
         self.advance()?; // skip 'if' kwd
         match self.tok.kind {
@@ -201,7 +196,7 @@ impl<'a> Parser<'_> {
             _ => (),
         }
         let expr = self.parse_expr()?;
-        let body = self.parse_compound()?;
+        let (body, _) = self.parse_compound()?;
         let kind = match self.tok.kind {
             TokenKind::Kwd(KwdKind::Else) => {
                 let else_kwd_span = self.tok.span;
@@ -209,21 +204,19 @@ impl<'a> Parser<'_> {
                 match self.tok.kind {
                     TokenKind::Kwd(KwdKind::If) =>
                         // 'else if'
-                        CondKind::If(
-                            Box::new(expr),
-                            Box::new(body),
+                        StmtKind::If(
+                            expr,
+                            body,
                             Some(Box::new(self.parse_if()?)),
                         ),
                     TokenKind::BraceOpen(BraceKind::Curly) => {
                         // 'else' (no expr)
-                        let else_body = self.parse_compound()?;
-                        let span = else_kwd_span.to(else_body.span());
-                        let else_ast = Expr::new(ExprKind::Cond(
-                            CondKind::Else(Box::new(else_body))
-                        ), span);
-                        CondKind::If(
-                            Box::new(expr),
-                            Box::new(body),
+                        let (else_body, else_body_span) = self.parse_compound()?;
+                        let span = else_kwd_span.to(&else_body_span);
+                        let else_ast = Stmt::new(StmtKind::Else(else_body), span);
+                        StmtKind::If(
+                            expr,
+                            body,
                             Some(Box::new(else_ast)),
                         )
                     },
@@ -235,13 +228,9 @@ impl<'a> Parser<'_> {
                         ).into()),
                 }
             },
-            _ => CondKind::If(Box::new(expr), Box::new(body), None),
+            _ => StmtKind::If(expr, body, None),
         };
-        let span = if_kwd_span.to(match &kind {
-            CondKind::If(body, ..) => body.span(),
-            CondKind::Else(body, ..) => body.span(),
-        });
-        Ok(Expr::new(ExprKind::Cond(kind), span))
+        Ok(Stmt::new(kind, if_kwd_span.to(&self.prev_tok.span)))
     }
 
     /// Parses a type annotation, e.g., `x: i32`.
@@ -262,22 +251,22 @@ impl<'a> Parser<'_> {
     }
 
     /// Parses a return statement.
-    fn parse_ret(&mut self) -> Result<Expr> {
+    fn parse_ret(&mut self) -> Result<Stmt> {
         let ret_kwd_span = self.tok.span;
         self.advance()?; // skip 'ret' kwd
         let (expr, span) = if let TokenKind::Delim(DelimKind::Scolon) = self.tok.kind {
             (None, ret_kwd_span)
         } else {
-            let expr = Box::new(self.parse_expr()?);
+            let expr = self.parse_expr()?;
             let span = ret_kwd_span.to(expr.span());
             (Some(expr), span)
         };
         self.eat(TokenKind::Delim(DelimKind::Scolon))?;
-        Ok(Expr::new(ExprKind::Stmt(StmtKind::Ret(expr)), span))
+        Ok(Stmt::new(StmtKind::Ret(expr), span))
     }
 
     /// Parses a let statement.
-    fn parse_let(&mut self) -> Result<Expr> {
+    fn parse_let(&mut self) -> Result<Stmt> {
         let let_kwd_span = self.tok.span;
         self.advance()?; // skip 'let' kwd
         let ident = if let TokenKind::Id(_) = self.tok.kind {
@@ -313,14 +302,15 @@ impl<'a> Parser<'_> {
         // A bit hacky, but works for now. essentially, the left-hand side of the let
         // expression is parsed here instead of self.parse_expr() so the type annotation can be
         // captured properly. Then, an expr is just returned anyways.
-        let expr = Box::new (self.parse_expr()?);
+        let expr = self.parse_expr()?;
         let span = let_kwd_span.to(expr.span());
         self.eat(TokenKind::Delim(DelimKind::Scolon))?;
-        Ok(Expr::new(ExprKind::Stmt(StmtKind::Let(ident, expr)), span))
+        Ok(Stmt::new(StmtKind::Let(ident, expr), span))
     }
 
     /// Parses a function.
-    fn parse_func(&mut self) -> Result<Func> {
+    fn parse_func(&mut self) -> Result<Stmt> {
+        let func_kwd_span = self.tok.span;
         self.advance()?; // skip 'func' kwd
         let func_ident_span = self.tok.span;
         let func_ident = self.expect_id("function name")?;
@@ -353,13 +343,13 @@ impl<'a> Parser<'_> {
                     &self.tok,
                 ).into()),
         };
-        let body = self.parse_compound()?;
-        let node = Func::new(
+        let (body, body_span) = self.parse_compound()?;
+        let func = Func::new(
             Ident::new(&func_ident, ret_ty, IdentCtx::FuncDef, func_ident_span),
             params,
-            Box::new(body),
+            body,
         );
-        Ok(node)
+        Ok(Stmt::new(StmtKind::Func(func), func_kwd_span.to(&body_span)))
     }
 
     /// Parses a term in an expression, i.e., a variable, literal, function call, etc..

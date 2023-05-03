@@ -65,25 +65,22 @@ impl Ident {
         &self.ctx
     }
 
+    /// Obtain a reference to the identifier's span.
     pub fn span(&self) -> &FileSpan {
         &self.span
     }
 
+    /// Converts the identifier's context into a string for use in error output.
     pub fn pretty_ctx(&self) -> String {
         match self.ctx {
             IdentCtx::Def => "variable",
             IdentCtx::FuncDef => "function",
             IdentCtx::Param => "parameter",
+            // TODO: This is bad :). Need another way of describing context (probably a
+            // wrapper enum, one for definitions and another for references).
             _ => unimplemented!(),
         }.to_string()
     }
-}
-
-/// The AST node object.
-#[derive(Clone, strum_macros::Display)]
-pub enum AstNode {
-    Func(Func),
-    Expr(Expr),
 }
 
 /// The AST function variant.
@@ -94,12 +91,12 @@ pub struct Func {
     /// Function parameters.
     params: Vec<Ident>,
     /// Function body.
-    body: Box<Expr>,
+    body: Compound,
 }
 
 impl Func {
     /// Creates a function node.
-    pub fn new(ident: Ident, params: Vec<Ident>, body: Box<Expr>) -> Func {
+    pub fn new(ident: Ident, params: Vec<Ident>, body: Compound) -> Func {
         Func {
             ident,
             params,
@@ -111,7 +108,9 @@ impl Func {
 /// The AST expression variant.
 #[derive(Clone)]
 pub struct Expr {
+    /// The kind of expression.
     kind: ExprKind,
+    /// The span of the entire expression.
     span: FileSpan,
 }
 
@@ -121,24 +120,10 @@ impl Expr {
         Expr { kind, span }
     }
 
-    pub fn fold(&mut self) -> Option<Expr> {
-        match &self.kind {
-            // ExprKind::Binary(bin_op_kind, lhs, rhs) => ExprKind::fold_binary(bin_op_kind, lhs, rhs),
-            _ => None,
-        }
-    }
-
+    /// Obtain a reference to the expression's span.
     pub fn span(&self) -> &FileSpan {
         &self.span
     }
-
-    // fn fold_binary(bin_op_kind: &BinOpKind, lhs: &Box<Expr>, rhs: &Box<Expr>) -> Option<Expr> {
-    //     match (&lhs.kind, &rhs.kind) {
-    //         (ExprKind::Lit(LitKind::Num(a)), ExprKind::Lit(LitKind::Num(b))) =>
-    //             Some(Expr::new(ExprKind::Lit(LitKind::Num(a + b)))),
-    //         _ => unimplemented!(),
-    //     }
-    // }
 }
 
 /// The various kinds of expression components.
@@ -148,20 +133,139 @@ pub enum ExprKind {
     Binary(BinOpKind, Box<Expr>, Box<Expr>),
     /// Unary expressions.
     Unary(UnaryOpKind, Box<Expr>),
-    /// Statements associated with expressions.
-    Stmt(StmtKind),
     /// Variable names.
     Id(Ident),
     /// Numeric literals.
     Lit(LitKind),
     /// Invocations (function calls).
     Call(Ident, Vec<Box<Expr>>),
-    /// Collection of expressions (block).
-    Compound(Vec<Box<AstNode>>, Option<u32>),
-    /// Conditionals (if, else if, else).
-    Cond(CondKind),
-    /// Loops (while, for).
-    Loop(LoopKind),
+}
+
+/// Object representing a translation unit. 
+pub struct Module {
+    /// File path of module.
+    name: String,
+    /// List of top-level statements.
+    stmts: Vec<Stmt>,
+}
+
+impl Module {
+    /// Creates a new module.
+    pub fn new(name: String) -> Module {
+        Module {
+            name,
+            stmts: Vec::new(),
+        }
+    }
+
+    /// Add a statement to the tree.
+    pub fn add_node(&mut self, node: Stmt) {
+        self.stmts.push(node)
+    }
+
+    /// Obtain a mutable reference to the list of top-level statements.
+    pub fn stmts_mut(&mut self) -> &mut Vec<Stmt> {
+        &mut self.stmts
+    }
+
+    /// Obtain the string representation of the module.
+    pub fn debug_string(&self) -> String {
+        self.debug(Indent::new())
+    }
+}
+
+/// Object representing statements.
+#[derive(Clone)]
+pub struct Stmt {
+    kind: StmtKind,
+    span: FileSpan,
+}
+
+impl Stmt {
+    /// Creates a new statement.
+    pub fn new(kind: StmtKind, span: FileSpan) -> Stmt {
+        Stmt {
+            kind,
+            span,
+        }
+    }
+
+    /// Obtain a reference to the statement's span.
+    pub fn span(&self) -> &FileSpan {
+        &self.span
+    }
+}
+
+#[derive(Clone, strum_macros::Display)]
+pub enum StmtKind {
+    /// Include statement.
+    Incl(String),
+    /// Return statement.
+    Ret(Option<Expr>),
+    /// Let statement.
+    Let(Ident, Expr),
+    /// While loop statement.
+    ///
+    /// If the expression is omitted from a while loop, the loop will run forever. This is
+    /// semantically the same as `while (true)` or just `loop` in Rust.
+    While(Option<Expr>, Compound),
+    /// If or else-if statement.
+    If(Expr, Compound, Option<Box<Stmt>>),
+    /// Else statement.
+    Else(Compound),
+    /// Collection of statements.
+    Compound(Compound),
+    /// Function definition.
+    Func(Func),
+    /// Standalone expression followed by a semicolon.
+    Expr(Expr),
+}
+
+// TODO: Do I need to add a span to compound for underlining entire blocks of code?
+#[derive(Clone)]
+pub struct Compound {
+    stmts: Vec<Stmt>,
+    break_idx: Option<usize>,
+}
+
+impl Compound {
+    /// Creates a new compound object.
+    pub fn new() -> Compound {
+        Compound {
+            stmts: Vec::new(),
+            break_idx: None,
+        }
+    }
+
+    /// Add a statement.
+    pub fn add_stmt(&mut self, stmt: Stmt) {
+        self.stmts.push(stmt);
+    }
+
+    /// Set the index at which the breaking statement exists in the list of statements.
+    pub fn set_break_idx(&mut self, idx: usize) {
+        self.break_idx = Some(idx);
+    }
+
+    /// Obtain the index at which the breaking statement exists in the list of statements.
+    pub fn get_break_idx(&self) -> Option<usize> {
+        self.break_idx
+    }
+
+    /// Obtain a reference to the breaking statement, if it exists.
+    pub fn get_break_stmt(&self) -> Option<&Stmt> {
+        self.break_idx.and_then(|i| self.stmts.get(i))
+    }
+
+    /// Obtain an immutable reference to the list of statements.
+    pub fn stmts(&self) -> &Vec<Stmt> {
+        &self.stmts
+    }
+
+    /// Obtain a mutable reference to the list of statements.
+    pub fn stmts_mut(&mut self) -> &mut Vec<Stmt> {
+        &mut self.stmts
+    }
 }
 
 /// The various kinds of loops.
@@ -175,115 +279,148 @@ pub enum LoopKind {
 pub enum CondKind {
     If(Box<Expr>, Box<Expr>, Option<Box<Expr>>),
     Else(Box<Expr>),
-    // While(Box<Expr>, Box<Expr>),
 }
 
-/// The various kinds of statements.
-#[derive(Clone, strum_macros::Display)]
-pub enum StmtKind {
-    /// Let statements, e.g. `let x = 13;`.
-    Let(Ident, Box<Expr>),
-    /// Return statements, e.g. `ret x + y;`.
-    Ret(Option<Box<Expr>>),
-    /// Include statements.
-    Incl(String),
-    /// While loop.
-    While(Box<Expr>, Box<Expr>)
+/// A helper struct representing an indentation in the string representation of the AST.
+#[derive(Clone)]
+struct Indent(usize);
+
+impl std::fmt::Display for Indent {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", "  ".repeat(self.0))
+    }
 }
 
-impl AstNode {
-    /// A helper for the [`AstDebug`] trait to print without supplying the number of indents.
-    pub fn debug_string(&self) -> String {
-        self.debug(0)
+impl Indent {
+    /// Creates a new indent object.
+    pub fn new() -> Indent {
+        Indent(0)
     }
 
-    // pub fn fold(&self) -> Option<AstNode> {
-    //     match &self {
-    //         AstNode::BinaryExpr { op, lhs, rhs } => {
-    //             match (&**rhs, &**lhs) {
-    //                 (AstNode::Num(lhs_n), AstNode::Num(rhs_n)) => Some(AstNode::Num(AstNode::fold_const_i32(op.clone(), *lhs_n, *rhs_n))),
-    //                 _ => None
-    //             }
-    //         },
-    //         _ => None
-    //     }
-    // }
-    //
-    // pub fn fold_const_i32(op_kind: OpKind, a: i32, b: i32) -> i32 {
-    //     match op_kind {
-    //         OpKind::Add => a + b,
-    //         OpKind::Sub => a - b,
-    //         OpKind::Mul => a * b,
-    //         OpKind::Div => a / b,
-    //         _ => panic!("Unhandled OpKind in constant folding of i32: {}", op_kind)
-    //     }
-    // }
+    /// Obtain an indent with an extra level of indentation.
+    pub fn plus(&self) -> Indent {
+        Indent(self.0 + 1)
+    }
 }
 
-/// A trait providing a way to print the AST.
+/// Provides a way to debug the AST by obtaining a string representation.
 trait AstDebug {
-    fn debug(&self, indents: usize) -> String;
+    fn debug(&self, indent: Indent) -> String;
 }
 
-impl AstDebug for AstNode {
-    fn debug(&self, indents: usize) -> String {
-        match self {
-            AstNode::Func(func) => func.debug(indents),
-            AstNode::Expr(expr) => expr.debug(indents),
+impl AstDebug for Module {
+    fn debug(&self, indent: Indent) -> String {
+        format!("{}Module({})\n{}",
+            indent,
+            self.name,
+            self.stmts.iter()
+                .enumerate()
+                .map(|(i, child)| -> String {
+                    if i == self.stmts.len() - 1 { 
+                        child.debug(indent.plus())
+                    } else { 
+                        format!("{}\n", child.debug(indent.plus()))
+                    }
+                })
+                .collect::<String>()
+        )
+    }
+}
+
+impl AstDebug for Stmt {
+    fn debug(&self, indent: Indent) -> String {
+        match &self.kind {
+            StmtKind::Incl(ref file_path) => format!("{}({})", self.kind, file_path),
+            StmtKind::Func(ref func) =>
+                format!("{}{}{}",
+                    indent,
+                    self.kind,
+                    func.debug(indent.clone())
+                ),
+            StmtKind::Let(ref ident, ref expr) =>
+                format!("{}{}({}: {})\n{}",
+                    indent,
+                    self.kind,
+                    ident.raw(),
+                    ident.ty_kind(),
+                    expr.debug(indent.plus()),
+                ),
+            StmtKind::Ret(ref expr) =>
+                match expr {
+                    Some(expr) =>
+                        format!("{}{}\n{}",
+                            indent,
+                            self.kind,
+                            expr.debug(indent.plus()),
+                        ),
+                    None => format!("{}(void)", self.kind),
+                },
+            StmtKind::Expr(ref expr) => expr.debug(indent),
+            StmtKind::Compound(ref compound) =>
+                format!("{}\n{}",
+                    self.kind,
+                    compound.debug(indent.plus())
+                ),
+            StmtKind::While(ref expr, ref body) =>
+                match expr {
+                    Some(expr) =>
+                        format!("{}{}\n{}{}",
+                            indent,
+                            self.kind,
+                            expr.debug(indent.plus()),
+                            body.debug(indent.plus())
+                        ),
+                    None =>
+                        format!("{}(forever){}",
+                            self.kind,
+                            body.debug(indent.plus())
+                        ),
+                },
+            StmtKind::If(ref expr, ref body, ref other) => {
+                let if_string = format!("{}{}\n{}{}",
+                    indent,
+                    self.kind,
+                    expr.debug(indent.plus()),
+                    body.debug(indent.plus())
+                );
+                match other {
+                    Some(other) =>
+                        format!("{}\n{}",
+                            if_string,
+                            other.debug(indent.plus())
+                        ),
+                    None => if_string,
+                }
+            },
+            StmtKind::Else(ref body) =>
+                format!("{}{}{}",
+                    indent,
+                    self.kind,
+                    body.debug(indent.plus())
+                ),
         }
     }
 }
 
 impl AstDebug for Expr {
-    fn debug(&self, indents: usize) -> String {
-        let out_string = match &self.kind {
-            ExprKind::Compound(children, ..) if children.len() == 0 =>
-                // block is empty
-                String::new(),
-            ExprKind::Compound(children, ..) =>
-                format!("\n{}",
-                    children.iter()
-                    // need to check if child is not last
-                        .enumerate()
-                        .map(|(i, child)| -> String {
-                            if i == children.len() - 1 { 
-                                child.debug(indents+1)
-                            } else { 
-                                child.debug(indents+1) + "\n"
-                            }
-                        })
-                        .collect::<String>()
-                ),
-            ExprKind::Stmt(stmt_kind) => {
-                let stmt_string = match stmt_kind {
-                    StmtKind::Let(ident, expr) =>
-                        format!(
-                            "({}: {})\n{}",
-                            ident.raw(),
-                            ident.ty_kind(),
-                            expr.debug(indents+2),
-                        ),
-                    StmtKind::Ret(expr) =>
-                        match expr {
-                            Some(expr) => format!("\n{}", expr.debug(indents+2)),
-                            None => TyKind::Void.to_string(),
-                        },
-                    _ => unimplemented!()
-                };
-                format!("\n{}{}{}", "  ".repeat(indents+1), stmt_kind, stmt_string)
-            },
+    fn debug(&self, indent: Indent) -> String {
+        match &self.kind {
             ExprKind::Binary(bin_op_kind, lhs, rhs) =>
                 format!(
-                    "({})\n{}\n{}",
+                    "{}{}({})\n{}\n{}",
+                    indent,
+                    self.kind,
                     bin_op_kind,
-                    lhs.debug(indents+1),
-                    rhs.debug(indents+1)
+                    lhs.debug(indent.plus()),
+                    rhs.debug(indent.plus())
                 ),
             ExprKind::Unary(unary_op_kind, expr) =>
                 format!(
-                    "({})\n{}",
+                    "{}{}({})\n{}",
+                    indent,
+                    self.kind,
                     unary_op_kind,
-                    expr.debug(indents+1),
+                    expr.debug(indent.plus()),
                 ),
             ExprKind::Lit(lit_kind) => {
                 let lit_string = match lit_kind {
@@ -292,96 +429,71 @@ impl AstDebug for Expr {
                     LitKind::Bool(val) => val.to_string(),
                 };
                 format!(
-                    "\n{}{}({})",
-                    "  ".repeat(indents+1),
+                    "{}{}({})",
+                    indent,
                     lit_kind,
                     lit_string,
                 )
             },
             ExprKind::Id(ident) =>
-                format!("({}, {}, {})",
+                format!("{}{}({}, {}, {})",
+                    indent,
+                    self.kind,
                     ident.raw(),
                     ident.ty_kind(),
                     ident.ctx(),
                 ),
             ExprKind::Call(ident, args) if args.len() == 0 =>
                 // no args
-                format!("({})", ident.raw()),
+                format!("{}{}({})",
+                    indent,
+                    self.kind,
+                    ident.raw()
+                ),
             ExprKind::Call(ident, args) =>
-                format!("({})\n{}Args\n{}",
+                format!("{}{}({})\n{}",
+                    indent,
+                    self.kind,
                     ident.raw(),
-                    "  ".repeat(indents+1),
                     args.iter()
-                    // need to check if child is not last
                         .enumerate()
                         .map(|(i, arg)| -> String {
                             if i == args.len() - 1 { 
-                                arg.debug(indents+2)
+                                arg.debug(indent.plus())
                             } else { 
-                                arg.debug(indents+2) + "\n"
+                                arg.debug(indent.plus()) + "\n"
                             }
                         })
                         .collect::<String>()
                 ),
-            ExprKind::Cond(cond_kind) =>
-                match cond_kind {
-                    CondKind::If(expr, body, ref other) =>
-                        match other {
-                            Some(other) =>
-                                format!(
-                                    "({})\n{}\n{}\n{}",
-                                    cond_kind,
-                                    expr.debug(indents+1),
-                                    body.debug(indents+1),
-                                    other.debug(indents+1),
-                                ),
-                            None => 
-                                format!(
-                                    "({})\n{}\n{}",
-                                    cond_kind,
-                                    expr.debug(indents+1),
-                                    body.debug(indents+1),
-                                ),
-                        },
-                    CondKind::Else(body) =>
-                        format!(
-                            "({})\n{}",
-                            cond_kind,
-                            body.debug(indents+1),
-                        ),
-                }
-            ExprKind::Loop(loop_kind) =>
-                match loop_kind {
-                    LoopKind::While(expr, body) =>
-                        match expr {
-                            Some(expr) =>
-                                format!(
-                                    "({})\n{}\n{}",
-                                    loop_kind,
-                                    expr.debug(indents+1),
-                                    body.debug(indents+1),
-                                ),
-                            None =>
-                                format!(
-                                    "({} (forever))\n{}",
-                                    loop_kind,
-                                    body.debug(indents+1),
-                                )
+        }
+    }
+}
+
+impl AstDebug for Compound {
+    fn debug(&self, indent: Indent) -> String {
+        format!("\n{}",
+            self.stmts.iter()
+                .enumerate()
+                .map(|(i, child)| -> String {
+                    if i == self.stmts.len() - 1 { 
+                        child.debug(indent.clone())
+                    } else { 
+                        format!("{}\n", child.debug(indent.clone()))
                     }
-                }
-        };
-        format!("{}{}{}", "  ".repeat(indents), self.kind, out_string)
+                })
+                .collect::<String>()
+        )
     }
 }
 
 impl AstDebug for Func {
-    fn debug(&self, indents: usize) -> String {
-        let out_string = format!(
-            "Func({ident}) -> {ret_ty}\n{body}",
+    fn debug(&self, indent: Indent) -> String {
+        format!(
+            "({ident}) -> {ret_ty}{body}",
             ident = self.ident.raw(),
             ret_ty = self.ident.ty_kind(),
-            body = self.body.debug(indents+1)
-        );
-        format!("{}{}", "  ".repeat(indents), out_string)
+            body = self.body.debug(indent.plus())
+        )
     }
 }
