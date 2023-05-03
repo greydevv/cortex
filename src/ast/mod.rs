@@ -6,7 +6,7 @@ use crate::symbols::{
     BinOpKind,
     UnaryOpKind
 };
-use crate::io::file::FileSpan;
+use crate::io::file::{ FilePath, FileSpan };
 
 pub mod validate;
 
@@ -144,14 +144,14 @@ pub enum ExprKind {
 /// Object representing a translation unit. 
 pub struct Module {
     /// File path of module.
-    name: String,
+    name: FilePath,
     /// List of top-level statements.
     stmts: Vec<Stmt>,
 }
 
 impl Module {
     /// Creates a new module.
-    pub fn new(name: String) -> Module {
+    pub fn new(name: FilePath) -> Module {
         Module {
             name,
             stmts: Vec::new(),
