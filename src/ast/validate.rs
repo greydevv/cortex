@@ -167,9 +167,9 @@ impl<'a> Validator<'_> {
         // Check if the function's return type was satisfied
         if body_ret_ty != *func.ident.ty_kind() {
             let ret_span = match func.body.get_break_stmt() {
-                Some(ref stmt) => stmt.span(),
+                Some(ref stmt) => *stmt.span(),
                 // Underline the closing brace to show a missing return statement
-                None => todo!("implement span for Compound struct") // func.body.span().end()
+                None => func.body.span().end(),
             };
             return Err(CortexError::incompat_types(
                 &self.ctx,
