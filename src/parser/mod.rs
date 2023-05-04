@@ -6,7 +6,6 @@ use crate::io::error::{
     Diagnostic,
     DiagnosticKind
 };
-use crate::io::file::FileSpan;
 use crate::lexer::Lexer;
 use crate::ast::{
     Compound,
@@ -82,7 +81,7 @@ impl<'a> Parser<'_> {
 
     /// Parses a compound expression, i.e., a collection of statements and/or expressions inside a
     /// set of curly braces, `{` and `}`.
-    fn parse_compound(&mut self) -> Result<(Compound, FileSpan)> {
+    fn parse_compound(&mut self) -> Result<Compound> {
         let mut compound = Compound::new();
         // This will be reset in the loop
         let mut span = self.tok.span;
@@ -112,7 +111,8 @@ impl<'a> Parser<'_> {
             };
             compound.add_stmt(child);
         }
-        Ok((compound, span))
+        compound.set_span(span);
+        Ok(compound)
     }
 
     /// Parses an include statement, e.g., `include "some_file.cx"`.
@@ -181,8 +181,8 @@ impl<'a> Parser<'_> {
             TokenKind::BraceOpen(BraceKind::Curly) => None,
             _ => Some(self.parse_expr()?),
         };
-        let (body, body_span) = self.parse_compound()?;
-        let span = while_kwd_span.to(&body_span);
+        let body = self.parse_compound()?;
+        let span = while_kwd_span.to(&body.span());
         Ok(Stmt::new(StmtKind::While(expr, body), span))
     }
 
@@ -196,7 +196,7 @@ impl<'a> Parser<'_> {
             _ => (),
         }
         let expr = self.parse_expr()?;
-        let (body, _) = self.parse_compound()?;
+        let body = self.parse_compound()?;
         let kind = match self.tok.kind {
             TokenKind::Kwd(KwdKind::Else) => {
                 let else_kwd_span = self.tok.span;
@@ -211,8 +211,8 @@ impl<'a> Parser<'_> {
                         ),
                     TokenKind::BraceOpen(BraceKind::Curly) => {
                         // 'else' (no expr)
-                        let (else_body, else_body_span) = self.parse_compound()?;
-                        let span = else_kwd_span.to(&else_body_span);
+                        let else_body = self.parse_compound()?;
+                        let span = else_kwd_span.to(&else_body.span());
                         let else_ast = Stmt::new(StmtKind::Else(else_body), span);
                         StmtKind::If(
                             expr,
@@ -343,7 +343,8 @@ impl<'a> Parser<'_> {
                     &self.tok,
                 ).into()),
         };
-        let (body, body_span) = self.parse_compound()?;
+        let body = self.parse_compound()?;
+        let body_span = body.span().clone();
         let func = Func::new(
             Ident::new(&func_ident, ret_ty, IdentCtx::FuncDef, func_ident_span),
             params,

@@ -116,6 +116,15 @@ impl FileSpan {
             end: self.end.clone(),
         }
     }
+
+    /// Create a default file span with no important information.
+    // TODO: Is there a better alternative default value for a file span?
+    pub fn dummy() -> FileSpan {
+        FileSpan {
+            beg: FilePos { line: 1, col: 1 },
+            end: FilePos { line: 1, col: 1 },
+        }
+    }
 }
 
 impl Len for FileSpan {

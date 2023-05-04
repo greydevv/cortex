@@ -226,6 +226,7 @@ pub enum StmtKind {
 pub struct Compound {
     stmts: Vec<Stmt>,
     break_idx: Option<usize>,
+    span: FileSpan,
 }
 
 impl Compound {
@@ -234,7 +235,18 @@ impl Compound {
         Compound {
             stmts: Vec::new(),
             break_idx: None,
+            span: FileSpan::dummy(),
         }
+    }
+
+    /// Set the span.
+    pub fn set_span(&mut self, span: FileSpan) {
+        self.span = span;
+    }
+
+    /// Obtain the span.
+    pub fn span(&self) -> &FileSpan {
+        &self.span
     }
 
     /// Add a statement.
