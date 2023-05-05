@@ -164,6 +164,16 @@ impl CortexError {
         ).into()
     }
 
+    /// Creates an error describing an include statement with a file path that doesn't exist.
+    pub fn nonexistent_include(ctx: &SessCtx, file_path: &FilePath, span: &FileSpan) -> CortexError {
+        Diagnostic::new_with_spans(
+            format!("could not locate file '{}'", file_path),
+            DiagnosticKind::Error,
+            &ctx.fh,
+            vec![(ctx.file_path().clone(), *span)]
+        ).into()
+    }
+
     /// Creates an error describing an invalid invocation of an identifier, e.g. trying to call a
     /// variable instead of a function.
     pub fn illegal_ident_call(ctx: &SessCtx, span: FileSpan, conflict: &Ident) -> CortexError {
