@@ -5,6 +5,7 @@ use std::time::Instant;
 use colored::Colorize;
 
 use crate::sess::Session;
+use crate::io::file::FilePath;
 
 pub mod symbols;
 pub mod sess;
@@ -16,7 +17,7 @@ pub mod ast;
 
 fn main() {
     let now = Instant::now();
-    let sess_result = Session::initiate();
+    let sess_result = Session::initiate(FilePath::new("samples/debug.cx"));
     match sess_result {
         Ok(_) => (),
         Err(ref err) => eprintln!("{}", err),

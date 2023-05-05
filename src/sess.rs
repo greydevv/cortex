@@ -30,15 +30,15 @@ impl SessCtx {
 pub struct Session;
 
 impl Session {
-    pub fn initiate() -> Result {
-        Session::compile()
+    pub fn initiate(file_path: FilePath) -> Result {
+        Session::compile(file_path)
     }
 
     /// The main driver of the compilation process.
-    fn compile() -> Result {
+    fn compile(file_path: FilePath) -> Result {
         let args = parse_args()?;
         let ctx = SessCtx::new(
-            FileHandler::new(FilePath::new("samples/debug.cx"))?
+            FileHandler::new(file_path)?
         );
         if args.get_flag("only-display-tokens") {
             return Session::only_lexer_tokens(&ctx);
