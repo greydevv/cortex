@@ -6,6 +6,7 @@ use crate::io::error::{
     Diagnostic,
     DiagnosticKind
 };
+use crate::io::file::{ FilePath, FileHandler };
 use crate::lexer::Lexer;
 use crate::ast::{
     Compound,
@@ -120,7 +121,9 @@ impl<'a> Parser<'_> {
         let incl_kwd_span = self.tok.span;
         self.advance()?; // skip 'include' kwd
         if let TokenKind::Lit(LitKind::Str(_)) = self.tok.kind {
-            let incl = Stmt::new(StmtKind::Incl(self.tok.value()), incl_kwd_span.to(&self.tok.span));
+            let file_path = FilePath::new(self.tok.value().as_str());
+            let module = self.resolve_include(file_path)?;
+            let incl = Stmt::new(StmtKind::Incl(module), incl_kwd_span.to(&self.tok.span));
             self.advance()?; // skip string
             self.eat(TokenKind::Delim(DelimKind::Scolon))?;
             Ok(incl)
@@ -131,6 +134,13 @@ impl<'a> Parser<'_> {
                 &self.tok
             ).into())
         }
+    }
+
+    /// Resolves an include statement and returns its AST.
+    fn resolve_include(&mut self, file_path: FilePath) -> Result<Module> {
+        let ctx = SessCtx::new(FileHandler::new(file_path)?);
+        let mut parser = Parser::new(&ctx)?;
+        parser.parse()
     }
 
     /// Continues parsing according to the keyword token the parser has encountered.

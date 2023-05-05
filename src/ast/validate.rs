@@ -315,7 +315,7 @@ impl<'a> Validator<'_> {
             StmtKind::Else(ref mut body) => self.validate_compound(body),
             StmtKind::While(ref mut expr, ref mut body) => self.validate_while(expr, body),
             StmtKind::Compound(ref mut compound) => self.validate_compound(compound),
-            StmtKind::Incl(..) => todo!("Validation for StmtKind::Incl"),
+            StmtKind::Incl(ref mut module) => self.validate(module).and_then(|_| Ok(TyKind::Void)),
         }
     }
 

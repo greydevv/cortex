@@ -142,6 +142,7 @@ pub enum ExprKind {
 }
 
 /// Object representing a translation unit. 
+#[derive(Clone)]
 pub struct Module {
     /// File path of module.
     name: FilePath,
@@ -199,7 +200,7 @@ impl Stmt {
 #[derive(Clone, strum_macros::Display)]
 pub enum StmtKind {
     /// Include statement.
-    Incl(String),
+    Incl(Module),
     /// Return statement.
     Ret(Option<Expr>),
     /// Let statement.
@@ -351,10 +352,11 @@ impl AstDebug for Module {
 impl AstDebug for Stmt {
     fn debug(&self, indent: Indent) -> String {
         match &self.kind {
-            StmtKind::Incl(ref file_path) =>
-                format!("{}({})",
+            StmtKind::Incl(ref module) => 
+                format!("{}{}\n{}",
+                    indent,
                     self.kind,
-                    file_path
+                    module.debug(indent.plus()),
                 ),
             StmtKind::Func(ref func) =>
                 format!("{}{}{}",
