@@ -123,14 +123,9 @@ pub struct Validator<'a> {
 impl<'a> Validator<'_> {
     /// Creates a new validator object.
     pub fn new(ctx: &'a SessCtx) -> Validator<'a> {
-        // let symb_tab = SymbolTableList::new();
-        // initialize global symbol table
-        // symb_tab.push();
         Validator {
             ctx,
             symb_tab: SymbolTable::new(),
-            // glob_symb_tab: SymbolTable::new(),
-            // symb_tab,
         }
     }
 
