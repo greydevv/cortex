@@ -553,6 +553,7 @@ impl<'a> Parser<'_> {
         Ok(())
     }
 
+    /// Creates a new instance of a source location from the file currently being parsed.
     fn new_loc(&self, span: FileSpan) -> SourceLoc {
         SourceLoc::new(self.ctx.file_path(), span)
     }

@@ -238,11 +238,11 @@ pub enum StmtKind {
     Expr(Expr),
 }
 
-// TODO: Do I need to add a span to compound for underlining entire blocks of code?
 #[derive(Clone)]
 pub struct Compound {
     stmts: Vec<Stmt>,
     break_idx: Option<usize>,
+    // TODO: Should this be a SourceLoc?
     span: FileSpan,
 }
 

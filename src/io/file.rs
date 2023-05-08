@@ -15,6 +15,7 @@ pub struct SourceLoc {
 }
 
 impl SourceLoc {
+    /// Create a new source location object.
     pub fn new(file_path: &Rc<FilePath>, span: FileSpan) -> SourceLoc {
         SourceLoc {
             file_path: file_path.clone(),
@@ -22,14 +23,17 @@ impl SourceLoc {
         }
     }
 
+    /// Obtain a reference to the location's file path.
     pub fn file_path(&self) -> &Rc<FilePath> {
         &self.file_path
     }
 
+    /// Obtain the span of the location.
     pub fn span(&self) -> &FileSpan {
         &self.span
     }
 
+    /// Set the span of the location.
     pub fn set_span(&mut self, span: FileSpan) {
         self.span = span
     }
@@ -90,10 +94,12 @@ impl FileHandler {
 
 /// Compares file handlers based on their file path.
 impl PartialEq for FileHandler {
+    /// Compares the object's file paths for equality.
     fn eq(&self, other: &FileHandler) -> bool {
         self.file_path == other.file_path
     }
 
+    /// Compares the object's file paths for inequality.
     fn ne(&self, other: &FileHandler) -> bool {
         self.file_path != other.file_path
     }
