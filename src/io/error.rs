@@ -2,6 +2,7 @@
 
 use std::fmt;
 use std::error::Error;
+use std::ops::Deref;
 use std::io::ErrorKind;
 use std::convert::From;
 
@@ -11,7 +12,12 @@ use clap::error::ErrorKind as ClapErrorKind;
 use clap::error::Error as ClapError;
 
 use crate::ast::{ Ident, IdentCtx };
-use crate::io::file::{ FileHandler, FilePath, FileSpan };
+use crate::io::file::{
+    FileHandler,
+    FilePath,
+    FileSpan,
+    SourceLoc
+};
 use crate::symbols::{ Token, Len, TyKind };
 use crate::sess::SessCtx;
 
@@ -70,10 +76,10 @@ impl CortexError {
     /// Creates a syntax error.
     pub fn syntax_err(ctx: &SessCtx, msg: &str, span: FileSpan, _help: Option<String>) -> CortexError {
         Diagnostic::new_with_spans(
+            ctx,
             msg.to_string(),
             DiagnosticKind::Error,
-            &ctx.fh,
-            vec![(ctx.file_path().clone(), span)],
+            vec![SourceLoc::new(ctx.file_path(), span.clone())],
         ).into()
     }
 
@@ -88,49 +94,49 @@ impl CortexError {
     /// Creates an error from an invalid integer literal.
     pub fn invalid_integer_literal(ctx: &SessCtx, lit: &String, span: FileSpan) -> CortexError {
         Diagnostic::new_with_spans(
+            ctx,
             format!("'{}' is not a valid integer literal", lit),
             DiagnosticKind::Error,
-            &ctx.fh,
-            vec![(ctx.file_path().clone(), span)],
+            vec![SourceLoc::new(ctx.file_path(), span.clone())],
         ).into()
     }
 
     /// Creates an error when a binary operator was expected but one was not received.
     pub fn expected_bin_op(ctx: &SessCtx, lit: &String, span: FileSpan) -> CortexError {
         Diagnostic::new_with_spans(
+            ctx,
             format!("'{}' is not a binary operator", lit),
             DiagnosticKind::Error,
-            &ctx.fh,
-            vec![(ctx.file_path().clone(), span)],
+            vec![SourceLoc::new(ctx.file_path(), span.clone())],
         ).into()
     }
 
     /// Creates an error describing an unclosed brace.
     pub fn unclosed_brace(ctx: &SessCtx, tok: &Token) -> CortexError {
         Diagnostic::new_with_spans(
+            ctx,
             format!("unclosed '{}'", tok.value()),
             DiagnosticKind::Error,
-            &ctx.fh,
-            vec![(ctx.file_path().clone(), tok.span)],
+            vec![SourceLoc::new(ctx.file_path(), tok.span.clone())],
         ).into()
     }
 
     /// Creates an error describing an unopened brace.
     pub fn unopened_brace(ctx: &SessCtx, tok: &Token) -> CortexError {
         Diagnostic::new_with_spans(
+            ctx,
             format!("unopened '{}'", tok.value()),
             DiagnosticKind::Error,
-            &ctx.fh,
-            vec![(ctx.file_path().clone(), tok.span)],
+            vec![SourceLoc::new(ctx.file_path(), tok.span.clone())],
         ).into()
     }
 
-    pub fn incompat_types(ctx: &SessCtx, expected_ty: &TyKind, received_ty: &TyKind, expr_span: &FileSpan) -> CortexError {
+    pub fn incompat_types(ctx: &SessCtx, expected_ty: &TyKind, received_ty: &TyKind, expr_loc: SourceLoc) -> CortexError {
         Diagnostic::new_with_spans(
+            ctx,
             format!("expected type '{}' but got type '{}'", *expected_ty, *received_ty),
             DiagnosticKind::Error,
-            &ctx.fh,
-            vec![(ctx.file_path().clone(), *expr_span)]
+            vec![expr_loc]
         ).into()
     }
 
@@ -142,46 +148,46 @@ impl CortexError {
             tok.value(),
         );
         Diagnostic::new_with_spans(
+            ctx,
             msg,
             DiagnosticKind::Error,
-            &ctx.fh,
-            vec![(ctx.file_path().clone(), tok.span)],
+            vec![SourceLoc::new(ctx.file_path(), tok.span.clone())],
         ).into()
     }
 
     /// Creates an error describing a mismatch between the expected number of arguments passed into
     /// a function call and the actual number of arguments passed.
-    pub fn args_n_mismatch(ctx: &SessCtx, expected_n: usize, received_n: usize, span: FileSpan) -> CortexError {
+    pub fn args_n_mismatch(ctx: &SessCtx, expected_n: usize, received_n: usize, loc: SourceLoc) -> CortexError {
         let arg_str = match expected_n {
             1 => "argument",
             _ => "arguments"
         };
         Diagnostic::new_with_spans(
+            ctx,
             format!("expected {} {} but received {}", expected_n, arg_str, received_n),
             DiagnosticKind::Error,
-            &ctx.fh,
-            vec![(ctx.file_path().clone(), span)]
+            vec![loc]
         ).into()
     }
 
     /// Creates an error describing an include statement with a file path that doesn't exist.
-    pub fn nonexistent_include(ctx: &SessCtx, file_path: &FilePath, span: &FileSpan) -> CortexError {
+    pub fn nonexistent_include(ctx: &SessCtx, file_path: &FilePath, loc: SourceLoc) -> CortexError {
         Diagnostic::new_with_spans(
+            ctx,
             format!("could not locate file '{}'", file_path),
             DiagnosticKind::Error,
-            &ctx.fh,
-            vec![(ctx.file_path().clone(), *span)]
+            vec![loc]
         ).into()
     }
 
     /// Creates an error describing an invalid invocation of an identifier, e.g. trying to call a
     /// variable instead of a function.
-    pub fn illegal_ident_call(ctx: &SessCtx, span: FileSpan, conflict: &Ident) -> CortexError {
+    pub fn illegal_ident_call(ctx: &SessCtx, loc: SourceLoc, conflict: &Ident) -> CortexError {
         Diagnostic::new_with_spans(
+            ctx,
             format!("cannot invoke type {}", conflict.ty_kind()),
             DiagnosticKind::Error,
-            &ctx.fh,
-            vec![(ctx.file_path().clone(), span)]
+            vec![loc]
         ).into()
     }
 
@@ -208,10 +214,10 @@ impl CortexError {
         };
         let mut diags = vec![
             Diagnostic::new_with_spans(
+                ctx,
                 msg,
                 DiagnosticKind::Error,
-                &ctx.fh,
-                vec![(ctx.file_path().clone(), *ident.span())],
+                vec![ident.loc().clone()],
             )
         ];
         if let Some(conflict) = conflict {
@@ -220,11 +226,13 @@ impl CortexError {
                 conflict.raw(),
                 conflict.pretty_ctx(),
             );
+            // TODO: Safe to unwrap here? Any paths to this method should always exist as this
+            // method is called during the semantic checking phase.
             diags.push(Diagnostic::new_with_spans(
+                ctx,
                 help_msg,
                 DiagnosticKind::Help,
-                &ctx.fh,
-                vec![(ctx.file_path().clone(), *conflict.span())],
+                vec![conflict.loc().clone()],
             ))
         }
 
@@ -297,7 +305,7 @@ pub struct Diagnostic {
     /// The kind of diagnostic.
     kind: DiagnosticKind,
     /// Optional positions in source code.
-    spans: Option<Vec<(FilePath, String, FileSpan)>>,
+    spans: Option<Vec<(SourceLoc, String)>>,
 }
 
 
@@ -312,17 +320,35 @@ impl Diagnostic {
     }
 
     /// Creates a new diagnostic with associated source code.
-    pub fn new_with_spans(msg: String, kind: DiagnosticKind, fh: &FileHandler, spans: Vec<(FilePath, FileSpan)>) -> Diagnostic {
+    pub fn new_with_spans(ctx: &SessCtx, msg: String, kind: DiagnosticKind, locs: Vec<SourceLoc>) -> Diagnostic {
         let mut spans_assoc = Vec::new();
-        for (file_path, span) in spans {
+        for loc in locs {
             // TODO: Need to be careful here. Use of lines.nth in the format macro will consume
             // this iterator. This means that if the same line of source code is included in
             // another diagnostic, then it will show up as a blank line. Eventually, will need
             // to rethink this and find an alternative solution for the unwrap_or_else(|| "")
             // call. This seems inefficient to call contents().lines() every loop. In either case,
             // need to take a look at this.
-            let line = fh.contents().lines().nth(span.beg.line-1).unwrap_or_else(|| "");
-            spans_assoc.push((file_path, line.to_string(), span));
+            let line_no = loc.span().beg.line-1;
+            let line = if ctx.fh.file_path() == loc.file_path() {
+                // Don't read the file again if it's already open.
+                ctx.fh.contents()
+                    .lines()
+                    .nth(line_no)
+                    .unwrap_or_else(|| "")
+                    .to_string()
+            } else {
+                // TODO: Unwrapping should be safe here because no error with a span should be
+                // thrown before that file's existence is verified (by the parser).
+                FileHandler::new(loc.file_path().deref().clone())
+                    .unwrap()
+                    .contents()
+                    .lines()
+                    .nth(line_no)
+                    .unwrap_or_else(|| "")
+                    .to_string()
+            };
+            spans_assoc.push((loc, line));
         }
         Diagnostic {
             msg,
@@ -355,7 +381,8 @@ impl Diagnostic {
         match self.spans {
             Some(ref spans) => {
                 let mut sources = Vec::new();
-                for (file_path, line, span) in spans {
+                for (loc, line) in spans {
+                    let span = loc.span();
                     let line_nr = span.beg.line.to_string();
                     let indent = " ".repeat(line_nr.len() + 1);
                     let underline = self.kind.underline_char()
@@ -369,7 +396,7 @@ impl Diagnostic {
                         span.beg.line,
                         span.beg.col,
                         "in".bold(),
-                        file_path,
+                        loc.file_path(),
                         indent,
                         line_nr.bold(),
                         line,

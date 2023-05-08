@@ -1,5 +1,7 @@
 //! Compilation driver.
 
+use std::rc::Rc;
+
 use crate::io::error::Result;
 use crate::io::file::{ FileHandler, FilePath };
 use crate::parser::Parser;
@@ -21,8 +23,8 @@ impl SessCtx {
     }
 
     /// Gets the file path of the file being compiled.
-    pub fn file_path(&self) -> FilePath {
-        self.fh.file_path().clone()
+    pub fn file_path(&self) -> &Rc<FilePath> {
+        self.fh.file_path()
     }
 }
 

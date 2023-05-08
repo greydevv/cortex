@@ -1,12 +1,18 @@
 //! The AST objects and validator.
 
+use std::rc::Rc;
+
 use crate::symbols::{
     TyKind,
     LitKind,
     BinOpKind,
     UnaryOpKind
 };
-use crate::io::file::{ FilePath, FileSpan };
+use crate::io::file::{
+    FilePath,
+    FileSpan,
+    SourceLoc
+};
 
 pub mod validate;
 
@@ -31,17 +37,17 @@ pub struct Ident {
     raw: String,
     ty_kind: TyKind,
     ctx: IdentCtx,
-    span: FileSpan,
+    loc: SourceLoc,
 }
 
 impl Ident {
     /// Creates an identifier.
-    pub fn new(ident: &String, ty_kind: TyKind, ctx: IdentCtx, span: FileSpan) -> Ident {
+    pub fn new(ident: &String, ty_kind: TyKind, ctx: IdentCtx, loc: SourceLoc) -> Ident {
         Ident {
             raw: ident.clone(),
             ty_kind,
             ctx,
-            span,
+            loc,
         }
     }
 
@@ -67,7 +73,17 @@ impl Ident {
 
     /// Obtain a reference to the identifier's span.
     pub fn span(&self) -> &FileSpan {
-        &self.span
+        self.loc.span()
+    }
+
+    /// Obtain a reference to the file the identifier was defined in.
+    pub fn file_path(&self) -> &Rc<FilePath> {
+        self.loc.file_path()
+    }
+
+    /// Obtain a reference to the location of the identifier in the source code.
+    pub fn loc(&self) -> &SourceLoc {
+        &self.loc
     }
 
     /// Converts the identifier's context into a string for use in error output.
@@ -110,19 +126,19 @@ impl Func {
 pub struct Expr {
     /// The kind of expression.
     kind: ExprKind,
-    /// The span of the entire expression.
-    span: FileSpan,
+    /// The location of the entire expression.
+    loc: SourceLoc,
 }
 
 impl Expr {
     /// Creates an expression node.
-    pub fn new(kind: ExprKind, span: FileSpan) -> Expr {
-        Expr { kind, span }
+    pub fn new(kind: ExprKind, loc: SourceLoc) -> Expr {
+        Expr { kind, loc }
     }
 
     /// Obtain a reference to the expression's span.
-    pub fn span(&self) -> &FileSpan {
-        &self.span
+    pub fn loc(&self) -> &SourceLoc {
+        &self.loc
     }
 }
 
@@ -179,21 +195,21 @@ impl Module {
 #[derive(Clone)]
 pub struct Stmt {
     kind: StmtKind,
-    span: FileSpan,
+    loc: SourceLoc,
 }
 
 impl Stmt {
     /// Creates a new statement.
-    pub fn new(kind: StmtKind, span: FileSpan) -> Stmt {
+    pub fn new(kind: StmtKind, loc: SourceLoc) -> Stmt {
         Stmt {
             kind,
-            span,
+            loc,
         }
     }
 
-    /// Obtain a reference to the statement's span.
-    pub fn span(&self) -> &FileSpan {
-        &self.span
+    /// Obtain a reference to the statement's location.
+    pub fn loc(&self) -> &SourceLoc {
+        &self.loc
     }
 }
 

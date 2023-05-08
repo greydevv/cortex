@@ -7,7 +7,7 @@ use std::collections::{
 
 use crate::symbols::{ TyKind, IntSize, BinOpKind, UnaryOpKind };
 use crate::io::error::{ Result, CortexError };
-use crate::io::file::{ FileSpan, FilePos };
+use crate::io::file::{ FileSpan, FilePos, SourceLoc };
 use crate::ast::{
     Module,
     Func,
@@ -162,15 +162,17 @@ impl<'a> Validator<'_> {
         // Check if the function's return type was satisfied
         if body_ret_ty != *func.ident.ty_kind() {
             let ret_span = match func.body.get_break_stmt() {
-                Some(ref stmt) => *stmt.span(),
+                // TODO: Optimize this use of loc().
+                Some(ref stmt) => *stmt.loc().span(),
                 // Underline the closing brace to show a missing return statement
                 None => func.body.span().end(),
             };
+            let loc = SourceLoc::new(self.ctx.file_path(), ret_span);
             return Err(CortexError::incompat_types(
                 &self.ctx,
                 &func.ident.ty_kind(),
                 &body_ret_ty,
-                &ret_span,
+                loc,
             ).into())
         }
         self.symb_tab.pop_scope();
@@ -196,7 +198,7 @@ impl<'a> Validator<'_> {
 
     /// Validates a generic expression node.
     fn validate_expr(&mut self, expr: &mut Expr) -> Result<TyKind> {
-        let mut span = *expr.span();
+        let mut loc = expr.loc().clone();
         match expr.kind {
             ExprKind::Id(ref mut ident) => self.symb_tab_query(ident).and_then(|entry| Ok(*entry.ident.ty_kind())),
             ExprKind::Lit(ref lit_kind) => Ok(self.validate_lit(lit_kind)),
@@ -207,7 +209,7 @@ impl<'a> Validator<'_> {
                 let func_ty_kind = *func_entry.ident.ty_kind();
                 match func_entry.kind {
                     IdentEntryKind::Var =>
-                        return Err(CortexError::illegal_ident_call(&self.ctx, *expr.span(), &func_entry.ident).into()),
+                        return Err(CortexError::illegal_ident_call(&self.ctx, loc, &func_entry.ident).into()),
                     IdentEntryKind::Func(expected_args) =>
                         // Check if correct amount of params are passed
                         if args.len() == expected_args.len() {
@@ -216,7 +218,7 @@ impl<'a> Validator<'_> {
                                 .try_for_each(|(arg, expected_arg)| -> Result {
                                     let arg_ty_kind = self.validate_expr(arg)?;
                                     if arg_ty_kind != expected_arg.ty_kind {
-                                        Err(CortexError::incompat_types(&self.ctx, &expected_arg.ty_kind, &arg_ty_kind, arg.span()).into())
+                                        Err(CortexError::incompat_types(&self.ctx, &expected_arg.ty_kind, &arg_ty_kind, arg.loc().clone()).into())
                                     } else {
                                         Ok(())
                                     }
@@ -227,27 +229,27 @@ impl<'a> Validator<'_> {
                             if expected_args.is_empty() {
                                 // Capture every argument in underline
                                 // Unwrapping safe, args is not empty
-                                let beg_span = args.first().unwrap().span();
-                                let end_span = args.last().unwrap().span();
-                                span = beg_span.to(end_span);
-                            }  else {
+                                let beg_span = args.first().unwrap().loc().span();
+                                let end_span = args.last().unwrap().loc().span();
+                                loc.set_span(beg_span.to(end_span))
+                            } else {
                                 if args.len() < expected_args.len() {
                                     let pos = match args.last() {
                                         // Point after last parameter of function call
-                                        Some(arg) => arg.span().end,
+                                        Some(arg) => arg.loc().span().end,
                                         // Point after opening parenthesis of function call
-                                        None => FilePos::new(span.beg.line, span.beg.col+1),
+                                        None => FilePos::new(loc.span().beg.line, loc.span().beg.col+1),
                                     };
-                                    span = FileSpan::one(pos);
+                                    loc.set_span(FileSpan::one(pos))
                                 } else {
                                     // Unwrapping safe, args.len() > expected_args.len()
-                                    let beg_span = args.get(expected_args.len()).unwrap().span();
+                                    let beg_span = args.get(expected_args.len()).unwrap().loc().span();
                                     // Unwrapping safe, args not empty
-                                    let end_span = args.last().unwrap().span();
-                                    span = beg_span.to(end_span);
+                                    let end_span = args.last().unwrap().loc().span();
+                                    loc.set_span(beg_span.to(end_span))
                                 }
                             }
-                            Err(CortexError::args_n_mismatch(&self.ctx, expected_args.len(), args.len(), span).into())
+                            Err(CortexError::args_n_mismatch(&self.ctx, expected_args.len(), args.len(), loc).into())
                         },
                 }?;
                 Ok(func_ty_kind)
@@ -289,7 +291,7 @@ impl<'a> Validator<'_> {
                             ident.update_ty(rhs_ty_kind);
                         } else {
                             if ident.ty_kind.compat(&rhs_ty_kind).is_none() {
-                                return Err(CortexError::incompat_types(self.ctx, &ident.ty_kind, &rhs_ty_kind, expr.span()).into());
+                                return Err(CortexError::incompat_types(self.ctx, &ident.ty_kind, &rhs_ty_kind, expr.loc().clone()).into());
                             }
                         }
                         let entry = IdentEntry::new(
@@ -347,7 +349,7 @@ impl<'a> Validator<'_> {
     fn expect_bool_from(&mut self, expr: &mut Expr) -> Result {
         let expr_ty_kind = self.validate_expr(expr)?;
         TyKind::Bool.compat(&expr_ty_kind)
-            .ok_or_else(|| CortexError::incompat_types(self.ctx, &TyKind::Bool, &expr_ty_kind, expr.span()).into())
+            .ok_or_else(|| CortexError::incompat_types(self.ctx, &TyKind::Bool, &expr_ty_kind, expr.loc().clone()).into())
             .and_then(|_| Ok(()))
     }
 
@@ -359,7 +361,7 @@ impl<'a> Validator<'_> {
             UnaryOpKind::Neg => TyKind::Int(IntSize::N32),
         };
         op_ty_kind.compat(&expr_ty_kind)
-            .ok_or_else(|| CortexError::incompat_types(self.ctx, &op_ty_kind, &expr_ty_kind, expr.span()).into())
+            .ok_or_else(|| CortexError::incompat_types(self.ctx, &op_ty_kind, &expr_ty_kind, expr.loc().clone()).into())
             .and_then(|_| Ok(op_ty_kind))
     }
 
@@ -368,7 +370,7 @@ impl<'a> Validator<'_> {
         let lhs_ty = self.validate_expr(lhs)?;
         let rhs_ty = self.validate_expr(rhs)?;
         if lhs_ty.compat(&rhs_ty).is_none() {
-            return Err(CortexError::incompat_types(self.ctx, &lhs_ty, &rhs_ty, rhs.span()).into());
+            return Err(CortexError::incompat_types(self.ctx, &lhs_ty, &rhs_ty, rhs.loc().clone()).into());
         }
         // TODO: Need to check which operators can be applied to what type! And if an operator can
         // be applied to a specific type, what type does that operation yield?

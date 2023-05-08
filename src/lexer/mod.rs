@@ -341,7 +341,7 @@ mod tests {
         Diagnostic,
         DiagnosticKind,
     };
-    use crate::io::file::FileHandler;
+    use crate::io::file::{ FileHandler, SourceLoc };
     use crate::io::error::tests::assert_diags;
 
     fn expect_toks_from_src(src: &str, expected_toks: Vec<Token>) -> Result {
@@ -448,12 +448,10 @@ mod tests {
             |lexer| {
                 vec![
                     Diagnostic::new_with_spans(
+                        &lexer.ctx,
                         "unterminated string literal".to_string(),
                         DiagnosticKind::Error,
-                        &lexer.ctx.fh,
-                        vec![
-                            (lexer.ctx.file_path(), FileSpan::new(FilePos::new(1, 1), FilePos::new(1, 15))),
-                        ],
+                        vec![SourceLoc::new(lexer.ctx.file_path(), FileSpan::new(FilePos::new(1, 1), FilePos::new(1, 15)))],
                     )
                 ]
             },
@@ -498,12 +496,10 @@ mod tests {
             |lexer| {
                 vec![
                     Diagnostic::new_with_spans(
+                        &lexer.ctx,
                         "unclosed '{'".to_string(),
                         DiagnosticKind::Error,
-                        &lexer.ctx.fh,
-                        vec![
-                            (lexer.ctx.file_path(), FileSpan::one(FilePos::new(2, 1))),
-                        ],
+                        vec![SourceLoc::new(lexer.ctx.file_path(), FileSpan::one(FilePos::new(2, 1)))],
                     )
                 ]
             },
@@ -523,12 +519,10 @@ mod tests {
             |lexer| {
                 vec![
                     Diagnostic::new_with_spans(
+                        &lexer.ctx,
                         "unopened '}'".to_string(),
                         DiagnosticKind::Error,
-                        &lexer.ctx.fh,
-                        vec![
-                            (lexer.ctx.file_path(), FileSpan::one(FilePos::new(2, 1))),
-                        ],
+                        vec![SourceLoc::new(lexer.ctx.file_path(), FileSpan::one(FilePos::new(2, 1)))],
                     )
                 ]
             },

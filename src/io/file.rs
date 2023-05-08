@@ -3,13 +3,42 @@
 use std::fs::File;
 use std::fmt;
 use std::io::Read;
+use std::rc::Rc;
 
 use crate::symbols::Len;
 use crate::io::error::{ Result, CortexError, IOErrorWrapper };
 
+#[derive(PartialEq, Debug, Clone)]
+pub struct SourceLoc {
+    file_path: Rc<FilePath>,
+    span: FileSpan,
+}
+
+impl SourceLoc {
+    pub fn new(file_path: &Rc<FilePath>, span: FileSpan) -> SourceLoc {
+        SourceLoc {
+            file_path: file_path.clone(),
+            span,
+        }
+    }
+
+    pub fn file_path(&self) -> &Rc<FilePath> {
+        &self.file_path
+    }
+
+    pub fn span(&self) -> &FileSpan {
+        &self.span
+    }
+
+    pub fn set_span(&mut self, span: FileSpan) {
+        self.span = span
+    }
+}
+
 /// The object representing a file path.
 #[derive(PartialEq, Debug, Clone)]
 pub struct FilePath(String);
+
 
 impl FilePath {
     /// Creates a new file path object.
@@ -32,7 +61,7 @@ impl fmt::Display for FilePath {
 /// The object representing a source file.
 #[derive(Debug, Clone)]
 pub struct FileHandler {
-    file_path: FilePath,
+    file_path: Rc<FilePath>,
     src: String,
 }
 
@@ -43,7 +72,7 @@ impl FileHandler {
         let mut src = String::new();
         f.read_to_string(&mut src).map_err(|e| CortexError::from(IOErrorWrapper(e, &file_path)))?;
         Ok(FileHandler {
-            file_path,
+            file_path: file_path.into(),
             src
         })
     }
@@ -54,7 +83,7 @@ impl FileHandler {
     }
 
     /// Gets the file path.
-    pub fn file_path(&self) -> &FilePath {
+    pub fn file_path(&self) -> &Rc<FilePath> {
         &self.file_path
     }
 }
@@ -179,8 +208,8 @@ mod tests {
     };
 
     impl FilePath {
-        pub fn pseudo_fp() -> FilePath {
-            FilePath(String::new())
+        pub fn pseudo_fp() -> Rc<FilePath> {
+            Rc::new(FilePath(String::new()))
         }
     }
 

@@ -1,12 +1,14 @@
 //! The main parsing interface.
 
+use std::ops::Deref;
+
 use crate::io::error::{
     Result,
     CortexError,
     Diagnostic,
     DiagnosticKind
 };
-use crate::io::file::{ FilePath, FileHandler };
+use crate::io::file::{ FilePath, FileHandler, FileSpan, SourceLoc };
 use crate::lexer::Lexer;
 use crate::ast::{
     Compound,
@@ -60,7 +62,7 @@ impl<'a> Parser<'_> {
 
     /// The main driver of the parser. This method parses the given file and returns its Abstract Syntax Tree (AST).
     pub fn parse(&mut self) -> Result<Module> {
-        let mut module = Module::new(self.ctx.file_path());
+        let mut module = Module::new(self.ctx.file_path().deref().clone());
         while !self.tok.is_eof() {
             if let TokenKind::Kwd(kwd_kind) = &self.tok.kind {
                 let child = match kwd_kind.clone() {
@@ -91,9 +93,9 @@ impl<'a> Parser<'_> {
             let child = match self.tok.kind.clone() {
                 TokenKind::Id(_) | TokenKind::Lit(_) => {
                     let expr = self.parse_expr()?;
-                    let expr_span = *expr.span();
+                    let expr_loc = expr.loc().clone();
                     self.eat(TokenKind::Delim(DelimKind::Scolon))?;
-                    Stmt::new(StmtKind::Expr(expr), expr_span)
+                    Stmt::new(StmtKind::Expr(expr), expr_loc)
                 },
                 TokenKind::Kwd(ref kwd_kind) => {
                     // Remember the index at which the compound was broken out of, e.g., return,
@@ -123,7 +125,7 @@ impl<'a> Parser<'_> {
         if let TokenKind::Lit(LitKind::Str(_)) = self.tok.kind {
             let file_path = FilePath::new(self.tok.value().as_str());
             let module = self.resolve_include(file_path)?;
-            let incl = Stmt::new(StmtKind::Incl(module), incl_kwd_span.to(&self.tok.span));
+            let incl = Stmt::new(StmtKind::Incl(module), self.new_loc(incl_kwd_span.to(&self.tok.span)));
             self.advance()?; // skip string
             self.eat(TokenKind::Delim(DelimKind::Scolon))?;
             Ok(incl)
@@ -169,10 +171,10 @@ impl<'a> Parser<'_> {
                 return Err(CortexError(
                     vec![
                         Diagnostic::new_with_spans(
+                            &self.ctx,
                             format!("found '{}' without a preceding 'if' statement", kind),
                             DiagnosticKind::Error,
-                            &self.ctx.fh,
-                            vec![(self.ctx.file_path(), span)],
+                            vec![self.new_loc(span)],
                         )
                     ]
                 ).into())
@@ -193,7 +195,7 @@ impl<'a> Parser<'_> {
         };
         let body = self.parse_compound()?;
         let span = while_kwd_span.to(&body.span());
-        Ok(Stmt::new(StmtKind::While(expr, body), span))
+        Ok(Stmt::new(StmtKind::While(expr, body), self.new_loc(span)))
     }
 
     /// Parses an if/else if/else statement.
@@ -223,7 +225,7 @@ impl<'a> Parser<'_> {
                         // 'else' (no expr)
                         let else_body = self.parse_compound()?;
                         let span = else_kwd_span.to(&else_body.span());
-                        let else_ast = Stmt::new(StmtKind::Else(else_body), span);
+                        let else_ast = Stmt::new(StmtKind::Else(else_body), self.new_loc(span));
                         StmtKind::If(
                             expr,
                             body,
@@ -240,7 +242,7 @@ impl<'a> Parser<'_> {
             },
             _ => StmtKind::If(expr, body, None),
         };
-        Ok(Stmt::new(kind, if_kwd_span.to(&self.prev_tok.span)))
+        Ok(Stmt::new(kind, self.new_loc(if_kwd_span.to(&self.prev_tok.span))))
     }
 
     /// Parses a type annotation, e.g., `x: i32`.
@@ -250,7 +252,7 @@ impl<'a> Parser<'_> {
         self.eat(TokenKind::Delim(DelimKind::Colon))?;
         if let TokenKind::Ty(ty_kind) = self.tok.kind.clone() {
             self.advance()?; // skip type
-            Ok(Ident::new(&ident, ty_kind, with_ident_ctx, ident_span))
+            Ok(Ident::new(&ident, ty_kind, with_ident_ctx, self.new_loc(ident_span)))
         } else {
             Err(CortexError::expected_but_got(
                 &self.ctx,
@@ -268,11 +270,11 @@ impl<'a> Parser<'_> {
             (None, ret_kwd_span)
         } else {
             let expr = self.parse_expr()?;
-            let span = ret_kwd_span.to(expr.span());
+            let span = ret_kwd_span.to(expr.loc().span());
             (Some(expr), span)
         };
         self.eat(TokenKind::Delim(DelimKind::Scolon))?;
-        Ok(Stmt::new(StmtKind::Ret(expr), span))
+        Ok(Stmt::new(StmtKind::Ret(expr), self.new_loc(span)))
     }
 
     /// Parses a let statement.
@@ -290,7 +292,7 @@ impl<'a> Parser<'_> {
                             &self.expect_id("identifier")?,
                             TyKind::Infer,
                             IdentCtx::Def,
-                            ident_span,
+                            self.new_loc(ident_span),
                         ))
                     },
                     _ =>
@@ -313,9 +315,9 @@ impl<'a> Parser<'_> {
         // expression is parsed here instead of self.parse_expr() so the type annotation can be
         // captured properly. Then, an expr is just returned anyways.
         let expr = self.parse_expr()?;
-        let span = let_kwd_span.to(expr.span());
+        let span = let_kwd_span.to(expr.loc().span());
         self.eat(TokenKind::Delim(DelimKind::Scolon))?;
-        Ok(Stmt::new(StmtKind::Let(ident, expr), span))
+        Ok(Stmt::new(StmtKind::Let(ident, expr), self.new_loc(span)))
     }
 
     /// Parses a function.
@@ -356,37 +358,37 @@ impl<'a> Parser<'_> {
         let body = self.parse_compound()?;
         let body_span = body.span().clone();
         let func = Func::new(
-            Ident::new(&func_ident, ret_ty, IdentCtx::FuncDef, func_ident_span),
+            Ident::new(&func_ident, ret_ty, IdentCtx::FuncDef, self.new_loc(func_ident_span)),
             params,
             body,
         );
-        Ok(Stmt::new(StmtKind::Func(func), func_kwd_span.to(&body_span)))
+        Ok(Stmt::new(StmtKind::Func(func), self.new_loc(func_kwd_span.to(&body_span))))
     }
 
     /// Parses a term in an expression, i.e., a variable, literal, function call, etc..
     fn parse_term(&mut self) -> Result<Expr> {
         let node = match self.tok.kind.clone() {
-            TokenKind::Lit(lit_kind) => Expr::new(ExprKind::Lit(lit_kind), self.tok.span),
+            TokenKind::Lit(lit_kind) => Expr::new(ExprKind::Lit(lit_kind), self.new_loc(self.tok.span)),
             TokenKind::BinOp(BinOpKind::Sub) => {
                 // treat this as a unary operation
                 let op_span = self.tok.span;
                 self.advance()?; // skip operator
                 let expr = self.parse_term()?;
-                let span = op_span.to(expr.span());
+                let span = op_span.to(expr.loc().span());
                 return Ok(Expr::new(ExprKind::Unary(
                     UnaryOpKind::Neg,
                     Box::new(expr)
-                ), span));
+                ), self.new_loc(span)));
             }
             TokenKind::UnaryOp(op_kind) => {
                 let op_span = self.tok.span;
                 self.advance()?; // skip operator
                 let expr = self.parse_term()?;
-                let span = op_span.to(expr.span());
+                let span = op_span.to(expr.loc().span());
                 return Ok(Expr::new(ExprKind::Unary(
                     op_kind.clone(),
                     Box::new(expr)
-                ), span));
+                ), self.new_loc(span)));
             },
             TokenKind::Id(ref id) => return self.parse_ident_or_call(id),
             TokenKind::BraceOpen(ref brace_kind) if *brace_kind == BraceKind::Paren => {
@@ -427,7 +429,7 @@ impl<'a> Parser<'_> {
                         ident,
                         TyKind::Lookup,
                         IdentCtx::FuncCall,
-                        ident_span,
+                        self.new_loc(ident_span),
                     ),
                     args,
                 )
@@ -438,12 +440,12 @@ impl<'a> Parser<'_> {
                         ident,
                         TyKind::Lookup,
                         IdentCtx::Ref,
-                        expr_span,
+                        self.new_loc(expr_span),
                     )
                 )
         };
 
-        Ok(Expr::new(expr_kind, expr_span))
+        Ok(Expr::new(expr_kind, self.new_loc(expr_span)))
     }
 
     /// Parses a comma separated list of expressions, such as expressions passed as arguments to
@@ -489,12 +491,12 @@ impl<'a> Parser<'_> {
                     };
                     self.advance()?;
                     let rhs = self.parse_expr_helper(next_min_prec)?;
-                    let span = lhs.span().to(rhs.span());
+                    let span = lhs.loc().span().to(rhs.loc().span());
                     lhs = Expr::new(ExprKind::Binary(
                         bin_op_kind,
                         Box::new(lhs),
                         Box::new(rhs),
-                    ), span);
+                    ), self.new_loc(span));
                 },
                 _ => break,
             }
@@ -549,5 +551,9 @@ impl<'a> Parser<'_> {
         }
         self.advance()?;
         Ok(())
+    }
+
+    fn new_loc(&self, span: FileSpan) -> SourceLoc {
+        SourceLoc::new(self.ctx.file_path(), span)
     }
 }
