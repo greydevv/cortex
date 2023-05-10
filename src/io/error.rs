@@ -170,6 +170,25 @@ impl CortexError {
         ).into()
     }
 
+    /// Creates an error describing a duplicate enum member.
+    pub fn dupe_enum_member(ctx: &SessCtx, ident: &Ident, original_ident: &Ident) -> CortexError {
+        let diags = vec![
+            Diagnostic::new_with_spans(
+                ctx,
+                format!("duplicate enum member '{}'", ident.raw()),
+                DiagnosticKind::Error,
+                vec![ident.loc().clone()],
+            ),
+            Diagnostic::new_with_spans(
+                ctx,
+                format!("'{}' was defined here", ident.raw()),
+                DiagnosticKind::Help,
+                vec![original_ident.loc().clone()],
+            ),
+        ];
+        CortexError::from(diags)
+    }
+
     /// Creates an error describing an include statement with a file path that doesn't exist.
     pub fn nonexistent_include(ctx: &SessCtx, file_path: &FilePath, loc: SourceLoc) -> CortexError {
         Diagnostic::new_with_spans(
@@ -183,9 +202,14 @@ impl CortexError {
     /// Creates an error describing an invalid invocation of an identifier, e.g. trying to call a
     /// variable instead of a function.
     pub fn illegal_ident_call(ctx: &SessCtx, loc: SourceLoc, conflict: &Ident) -> CortexError {
+        let msg = match conflict.ty_kind() {
+            TyKind::Enum => String::from("cannot invoke an enum"),
+            TyKind::EnumMember => String::from("cannot invoke an enum member"),
+            _ => format!("cannot invoke type {}", conflict.ty_kind()),
+        };
         Diagnostic::new_with_spans(
             ctx,
-            format!("cannot invoke type {}", conflict.ty_kind()),
+            msg,
             DiagnosticKind::Error,
             vec![loc]
         ).into()
@@ -196,7 +220,8 @@ impl CortexError {
         let msg = match ident.ctx() {
             IdentCtx::Def
                 | IdentCtx::Param
-                | IdentCtx::FuncDef =>
+                | IdentCtx::FuncDef
+                | IdentCtx::EnumDef =>
                     format!(
                         "'{}' was already defined",
                         ident.raw(),
@@ -236,7 +261,7 @@ impl CortexError {
             ))
         }
 
-        CortexError(diags)
+        CortexError::from(diags)
     }
 }
 
