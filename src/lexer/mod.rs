@@ -192,7 +192,11 @@ impl<'a> Lexer<'_> {
             '.' => TokenKind::Delim(DelimKind::Period),
             ',' => TokenKind::Delim(DelimKind::Comma),
             ';' => TokenKind::Delim(DelimKind::Scolon),
-            ':' => TokenKind::Delim(DelimKind::Colon),
+            ':' =>
+                match self.peek_char() {
+                    ':' => TokenKind::Delim(DelimKind::ScopeSep),
+                    _ => TokenKind::Delim(DelimKind::Colon),
+                },
             '+' => TokenKind::BinOp(BinOpKind::Add),
             '-' => 
                 match self.peek_char() {

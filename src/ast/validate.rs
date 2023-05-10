@@ -19,6 +19,7 @@ use crate::ast::{
     StmtKind,
     LitKind,
     Ident,
+    ScopeRes,
 };
 use crate::sess::SessCtx;
 
@@ -283,8 +284,13 @@ impl<'a> Validator<'_> {
                         },
                 }?;
                 Ok(func_ty_kind)
-            }
+            },
+            ExprKind::ScopeRes(ref mut scope_res) => self.validate_scope_res(scope_res),
         }
+    }
+
+    fn validate_scope_res(&mut self, _scope_res: &mut ScopeRes) -> Result<TyKind> {
+        todo!("validation for ExprKind::ScopeRes")
     }
 
     /// Validates a block.

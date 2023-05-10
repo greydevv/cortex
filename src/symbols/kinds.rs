@@ -7,6 +7,8 @@ pub enum DelimKind {
     Comma,
     Scolon,
     Colon,
+    /// A scope resolution separator (e.g., `::` in `Animal::Dog`)
+    ScopeSep,
 }
 
 impl Literal for DelimKind {
@@ -16,6 +18,7 @@ impl Literal for DelimKind {
             DelimKind::Comma => String::from(","),
             DelimKind::Scolon => String::from(";"),
             DelimKind::Colon => String::from(":"),
+            DelimKind::ScopeSep => String::from("::"),
         }
     }
 }

@@ -444,7 +444,9 @@ impl<'a> Parser<'_> {
                     Box::new(expr)
                 ), self.new_loc(span)));
             },
-            TokenKind::Id(ref id) => return self.parse_ident_or_call(id),
+            TokenKind::Id(ref id) => {
+                return self.parse_ident_or_call(id)
+            }
             TokenKind::BraceOpen(ref brace_kind) if *brace_kind == BraceKind::Paren => {
                 // pass opening parenthesis
                 self.advance()?;
@@ -470,6 +472,7 @@ impl<'a> Parser<'_> {
         let mut expr_span = self.tok.span;
         self.advance()?; // skip id token
         let expr_kind = match self.tok.kind {
+            TokenKind::Delim(DelimKind::ScopeSep) => todo!("parse me"),
             TokenKind::BraceOpen(BraceKind::Paren) => {
                 let open_paren_span = self.tok.span;
                 self.advance()?; // skip opening parenthesis

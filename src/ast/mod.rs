@@ -157,6 +157,22 @@ pub enum ExprKind {
     Lit(LitKind),
     /// Invocations (function calls).
     Call(Ident, Vec<Box<Expr>>),
+    /// Scope resolution (e.g., `Animal::Dog`)
+    ScopeRes(ScopeRes),
+}
+
+#[derive(Clone)]
+pub struct ScopeRes {
+    idents: Vec<Ident>,
+}
+
+impl ScopeRes {
+    /// Construct a new scope resolution node.
+    pub fn new() -> ScopeRes {
+        ScopeRes {
+            idents: Vec::new(),
+        }
+    }
 }
 
 /// Object representing a translation unit. 
@@ -571,7 +587,28 @@ impl AstDebug for Expr {
                         })
                         .collect::<String>()
                 ),
+            ExprKind::ScopeRes(scope_res) =>
+                format!("{}{}\n{}",
+                    indent,
+                    self.kind,
+                    scope_res.debug(indent.plus()),
+                ),
         }
+    }
+}
+
+impl AstDebug for ScopeRes {
+    fn debug(&self, indent: Indent) -> String {
+        self.idents.iter()
+            .enumerate()
+            .map(|(i, ident)| -> String {
+                if i == self.idents.len() - 1 { 
+                    format!("{}{}", indent, ident.raw())
+                } else { 
+                    format!("{}{}::", indent, ident.raw())
+                }
+            })
+            .collect::<String>()
     }
 }
 
