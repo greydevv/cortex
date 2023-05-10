@@ -11,6 +11,7 @@ use crate::io::file::{ FileSpan, FilePos, SourceLoc };
 use crate::ast::{
     Module,
     Func,
+    Enum,
     Expr,
     ExprKind,
     Compound,
@@ -39,6 +40,7 @@ impl IdentEntry {
 #[derive(Clone)]
 enum IdentEntryKind {
     Func(Vec<Ident>),
+    Enum,
     Var,
 }
 
@@ -208,7 +210,7 @@ impl<'a> Validator<'_> {
                 let func_entry = self.symb_tab_query(ident)?.clone();
                 let func_ty_kind = *func_entry.ident.ty_kind();
                 match func_entry.kind {
-                    IdentEntryKind::Var =>
+                    IdentEntryKind::Var | IdentEntryKind::Enum =>
                         return Err(CortexError::illegal_ident_call(&self.ctx, loc, &func_entry.ident).into()),
                     IdentEntryKind::Func(expected_args) =>
                         // Check if correct amount of params are passed
@@ -313,7 +315,17 @@ impl<'a> Validator<'_> {
             StmtKind::While(ref mut expr, ref mut body) => self.validate_while(expr, body),
             StmtKind::Compound(ref mut compound) => self.validate_compound(compound),
             StmtKind::Incl(ref mut module) => self.validate(module).and_then(|_| Ok(TyKind::Void)),
+            StmtKind::Enum(ref mut enumer) => self.validate_enum(enumer).and_then(|_| Ok(TyKind::Void)),
         }
+    }
+
+    /// Validates an enumeration definition.
+    fn validate_enum(&mut self, enumer: &mut Enum) -> Result {
+        let entry = IdentEntry::new(
+            enumer.ident.clone(),
+            IdentEntryKind::Enum,
+        );
+        self.symb_tab_insert(entry)
     }
 
     /// Validates a while loop.
