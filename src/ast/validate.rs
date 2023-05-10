@@ -2,7 +2,7 @@
 
 use std::collections::{
     HashMap,
-    VecDeque
+    VecDeque,
 };
 
 use crate::symbols::{ TyKind, IntSize, BinOpKind, UnaryOpKind };
@@ -29,6 +29,7 @@ struct IdentEntry {
 }
 
 impl IdentEntry {
+    /// Constructs a new `IdentEntry`.
     pub fn new(ident: Ident, kind: IdentEntryKind) -> IdentEntry {
         IdentEntry {
             kind,
@@ -44,12 +45,47 @@ enum IdentEntryKind {
     Var,
 }
 
+/// A representation of a scope.
+///
+/// Effectively just a wrapper around a `HashMap`.
+struct Scope {
+    inner: HashMap<String, IdentEntry>,
+}
+
+impl Scope {
+    /// Creates a new scope.
+    pub fn new() -> Scope {
+        Scope {
+            inner: HashMap::new()
+        }
+    }
+
+    /// Queries the scope for the given `Ident`.
+    ///
+    /// If the key is not present, `None` is returned. If the key is present, a reference to it is
+    /// returned.
+    pub fn query(&self, ident: &Ident) -> Option<&IdentEntry> {
+        self.inner.get(ident.raw())
+    }
+
+    /// Inserts an `IdentEntry` into the scope.
+    ///
+    /// If insertion was successful, `None` is returned. If insertion failed, i.e. the entry
+    /// already exists, a reference to the conflicting entry is returned.
+    pub fn insert(&mut self, entry: IdentEntry) -> Option<&IdentEntry> {
+        match self.inner.try_insert(entry.ident.raw().clone(), entry.clone()) {
+            Err(_) => self.query(&entry.ident), // return the conflicting entry
+            Ok(_) => None,
+        }
+    }
+}
+
 /// The symbol table object.
 struct SymbolTable {
     /// Global scope
-    global: HashMap<String, IdentEntry>,
+    global: Scope,
     /// Nested scopes
-    scopes: VecDeque<HashMap<String, IdentEntry>>,
+    nested: VecDeque<Scope>
 }
 
 impl SymbolTable {
@@ -57,9 +93,9 @@ impl SymbolTable {
     pub fn new() -> SymbolTable {
         SymbolTable {
             // global scope
-            global: HashMap::new(),
+            global: Scope::new(),
             // nested scopes
-            scopes: VecDeque::new()
+            nested: VecDeque::new(),
         }
     }
 
@@ -67,7 +103,7 @@ impl SymbolTable {
     ///
     /// This is called whenever a new (nested) scope is introduced.
     pub fn push_scope(&mut self) {
-        self.scopes.push_front(HashMap::new());
+        self.nested.push_front(Scope::new());
     }
 
     /// Pops a scope from the front of the queue.
@@ -76,12 +112,12 @@ impl SymbolTable {
     /// vector will be empty. If this scope's parent scope is another nested scope, the current
     /// scope is popped to make the parent scope the current scope.
     pub fn pop_scope(&mut self) {
-        self.scopes.pop_front();
+        self.nested.pop_front();
     }
 
     /// Returns a mutable reference to the current scope.
-    fn current_scope(&mut self) -> &mut HashMap<String, IdentEntry> {
-        self.scopes.front_mut()
+    fn current_scope(&mut self) -> &mut Scope {
+        self.nested.front_mut()
             .unwrap_or_else(|| &mut self.global)
     }
 
@@ -90,28 +126,20 @@ impl SymbolTable {
     /// If the entry does not exist, `None` is returned. Otherwise, `Some` is returned containing a
     /// reference to the entry.
     pub fn try_query(&self, ident: &Ident) -> Option<&IdentEntry> {
-        for scope in &self.scopes {
-            if scope.contains_key(ident.raw()) {
-                return scope.get(ident.raw());
+        for scope in &self.nested {
+            if let Some(entry) = scope.query(ident) {
+                return Some(entry)
             }
         }
-        self.global.get(ident.raw())
+        self.global.query(ident)
     }
 
     /// Inserts an entry into the symbol table.
     ///
     /// If insertion fails, i.e., there exists a matching entry in the symbol table, `Some` is
     /// returned containing that entry. Otherwise, `None` signifies a successful insertion.
-    pub fn try_insert(&mut self, entry: IdentEntry) -> Option<IdentEntry> {
-        if let Some(conflict) = self.try_query(&entry.ident) {
-            return Some(conflict.clone());
-        }
-        if self.current_scope().try_insert(entry.ident.raw().clone(), entry.clone()).is_err() {
-            // unwrapping is safe here (insert found a conflict, so we know it exists)
-            Some(self.try_query(&entry.ident).unwrap().clone())
-        } else {
-            None
-        }
+    pub fn try_insert(&mut self, entry: IdentEntry) -> Option<&IdentEntry> {
+        self.current_scope().insert(entry)
     }
 }
 
