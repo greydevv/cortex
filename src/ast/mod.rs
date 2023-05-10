@@ -29,10 +29,12 @@ pub enum IdentCtx {
     FuncCall,
     /// Function definition.
     FuncDef,
+    /// Enum definition.
+    EnumDef,
 }
 
 /// The identifier object.
-#[derive(Clone)]
+#[derive(PartialEq, Clone)]
 pub struct Ident {
     raw: String,
     ty_kind: TyKind,
@@ -236,6 +238,59 @@ pub enum StmtKind {
     Func(Func),
     /// Standalone expression followed by a semicolon.
     Expr(Expr),
+    Enum(Enum),
+}
+
+#[derive(Clone)]
+pub struct Enum {
+    ident: Ident,
+    members: Vec<Ident>,
+}
+
+impl AstDebug for Enum {
+    fn debug(&self, indent: Indent) -> String {
+        format!("({})\n{}",
+            self.ident.raw(),
+            self.members.iter()
+                .enumerate()
+                .map(|(i, e)| -> String {
+                    if i == self.members.len() - 1 {
+                        format!("{}{}",
+                            indent,
+                            e.raw(),
+                        )
+                    } else {
+                        format!("{}{}\n",
+                            indent,
+                            e.raw(),
+                        )
+                    }
+                })
+                .collect::<String>()
+        )
+    }
+}
+
+impl Enum {
+    pub fn new(ident: Ident) -> Enum {
+        Enum {
+            ident,
+            members: Vec::new(),
+        }
+    }
+
+    pub fn get_member(&self, member: &Ident) -> Option<&Ident> {
+        for m in &self.members {
+            if m.raw() == member.raw() {
+                return Some(m);
+            }
+        }
+        None
+    }
+
+    pub fn add_member(&mut self, member: Ident) {
+        self.members.push(member)
+    }
 }
 
 #[derive(Clone)]
@@ -442,6 +497,12 @@ impl AstDebug for Stmt {
                     self.kind,
                     body.debug(indent.plus())
                 ),
+            StmtKind::Enum(ref enum_def) =>
+                format!("{}{}{}",
+                    indent,
+                    self.kind,
+                    enum_def.debug(indent.plus()),
+                )
         }
     }
 }
