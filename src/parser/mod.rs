@@ -15,6 +15,7 @@ use crate::ast::{
     Module,
     Stmt,
     Func,
+    Enum,
     Expr,
     Ident,
     ExprKind,
@@ -68,6 +69,7 @@ impl<'a> Parser<'_> {
                 let child = match kwd_kind.clone() {
                     KwdKind::Include => self.parse_include()?,
                     KwdKind::Func => self.parse_func()?,
+                    KwdKind::Enum => self.parse_enum()?,
                     _ => unimplemented!("error message for bad start keyword: '{}'", kwd_kind)
                 };
                 module.add_node(child);
@@ -80,6 +82,57 @@ impl<'a> Parser<'_> {
             }
         }
         Ok(module)
+    }
+
+    /// Parses an enumeration definition.
+    fn parse_enum(&mut self) -> Result<Stmt> {
+        // Skip 'enum' keyword.
+        let enum_kwd_span = self.tok.span;
+        self.advance()?;
+        let ident_span = self.tok.span;
+        let ident_string = self.expect_id("identifier")?;
+        let mut enumer = Enum::new(
+            Ident::new(
+                &ident_string,
+                TyKind::Enum,
+                IdentCtx::EnumDef,
+                self.new_loc(ident_span),
+            )
+        );
+        self.eat(TokenKind::BraceOpen(BraceKind::Curly))?;
+        self.parse_enum_members(&mut enumer)?;
+        let closing_span = self.tok.span;
+        self.eat(TokenKind::BraceClosed(BraceKind::Curly))?;
+        Ok(Stmt::new(StmtKind::Enum(enumer), self.new_loc(enum_kwd_span.to(&closing_span))))
+    }
+
+    fn parse_enum_members(&mut self, enumer: &mut Enum) -> Result {
+        loop {
+            if let TokenKind::BraceClosed(BraceKind::Curly) = self.tok.kind {
+                // self.advance()?; // skip closing parenthesis
+                break;
+            }
+            let ident_span = self.tok.span;
+            let ident = Ident::new(
+                &self.expect_id("identifier")?,
+                TyKind::EnumMember,
+                IdentCtx::Def,
+                self.new_loc(ident_span),
+            );
+            if let Some(original_ident) = enumer.get_member(&ident) {
+                return Err(CortexError::dupe_enum_member(
+                    &self.ctx,
+                    &ident,
+                    original_ident,
+                ).into())
+            }
+            enumer.add_member(ident);
+            if let TokenKind::Delim(DelimKind::Comma) = self.tok.kind {
+                self.advance()?;
+            }
+        }
+
+        Ok(())
     }
 
     /// Parses a compound expression, i.e., a collection of statements and/or expressions inside a
@@ -181,6 +234,7 @@ impl<'a> Parser<'_> {
             }
             KwdKind::While => self.parse_while()?,
             KwdKind::For => unimplemented!("parsing of for loop"),
+            KwdKind::Enum => self.parse_enum()?,
         };
         Ok(node)
     }
