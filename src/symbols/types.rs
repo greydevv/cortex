@@ -5,17 +5,16 @@ use std::fmt;
 use crate::symbols::{ Literal, MaybeFrom };
 
 /// The various kinds of built-in types recognized by the compiler.
-#[derive(PartialEq, Clone, Copy, Debug)]
+#[derive(PartialEq, Clone, Debug)]
 pub enum TyKind {
     // UInt(IntSize),
     Int(IntSize),
     Bool,
     Str,
-    Enum,
-    EnumMember,
     Void,
     Infer,
     Lookup,
+    UserDef(String),
 }
 
 impl TyKind {
@@ -41,11 +40,10 @@ impl Literal for TyKind {
             TyKind::Int(size) => format!("i{}", *size as u32),
             TyKind::Bool => format!("bool"),
             TyKind::Str => format!("str"),
-            TyKind::Enum => String::from("Enum"),
-            TyKind::EnumMember => String::from("EnumMember"),
             TyKind::Void => String::from("void"),
             TyKind::Infer => String::from("Infer"),
             TyKind::Lookup => String::from("Lookup"),
+            TyKind::UserDef(name) => name.to_string(),
         }
     }
 }

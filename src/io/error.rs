@@ -175,13 +175,13 @@ impl CortexError {
         let diags = vec![
             Diagnostic::new_with_spans(
                 ctx,
-                format!("duplicate enum member '{}'", ident.raw()),
+                format!("duplicate enum member '{}'", ident),
                 DiagnosticKind::Error,
                 vec![ident.loc().clone()],
             ),
             Diagnostic::new_with_spans(
                 ctx,
-                format!("'{}' was defined here", ident.raw()),
+                format!("'{}' was defined here", ident),
                 DiagnosticKind::Help,
                 vec![original_ident.loc().clone()],
             ),
@@ -202,9 +202,8 @@ impl CortexError {
     /// Creates an error describing an invalid invocation of an identifier, e.g. trying to call a
     /// variable instead of a function.
     pub fn illegal_ident_call(ctx: &SessCtx, loc: SourceLoc, conflict: &Ident) -> CortexError {
-        let msg = match conflict.ty_kind() {
-            TyKind::Enum => String::from("cannot invoke an enum"),
-            TyKind::EnumMember => String::from("cannot invoke an enum member"),
+        let msg = match conflict.ctx() {
+            IdentCtx::EnumDef => String::from("cannot invoke an enum"),
             _ => format!("cannot invoke type {}", conflict.ty_kind()),
         };
         Diagnostic::new_with_spans(
@@ -224,17 +223,17 @@ impl CortexError {
                 | IdentCtx::EnumDef =>
                     format!(
                         "'{}' was already defined",
-                        ident.raw(),
+                        ident,
                     ),
             IdentCtx::Ref =>
                     format!(
                         "variable '{}' does not exist",
-                        ident.raw(),
+                        ident,
                     ),
             IdentCtx::FuncCall =>
                     format!(
                         "function '{}' does not exist",
-                        ident.raw(),
+                        ident,
                     ),
         };
         let mut diags = vec![
@@ -248,7 +247,7 @@ impl CortexError {
         if let Some(conflict) = conflict {
             let help_msg = format!(
                 "'{}' was defined earlier as a {}",
-                conflict.raw(),
+                conflict,
                 conflict.pretty_ctx(),
             );
             // TODO: Safe to unwrap here? Any paths to this method should always exist as this

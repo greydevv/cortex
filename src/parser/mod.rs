@@ -94,7 +94,7 @@ impl<'a> Parser<'_> {
         let mut enumer = Enum::new(
             Ident::new(
                 &ident_string,
-                TyKind::Enum,
+                TyKind::UserDef(ident_string.clone()),
                 IdentCtx::EnumDef,
                 self.new_loc(ident_span),
             )
@@ -115,7 +115,7 @@ impl<'a> Parser<'_> {
             let ident_span = self.tok.span;
             let ident = Ident::new(
                 &self.expect_id("identifier")?,
-                TyKind::EnumMember,
+                TyKind::UserDef(String::from("po")),
                 IdentCtx::Def,
                 self.new_loc(ident_span),
             );
@@ -466,40 +466,58 @@ impl<'a> Parser<'_> {
         Ok(node)
     }
 
+    fn parse_ident(&mut self, first_ident: &String) -> Result<Ident> {
+        let mut span = self.tok.span;
+        let mut qualifier = Vec::new();
+        let mut raw_ident = first_ident.clone();
+        // skip id token
+        self.advance()?;
+        loop {
+            if self.tok.kind == TokenKind::Delim(DelimKind::ScopeSep) {
+                // skip scope separator ('::')
+                self.advance()?;
+                qualifier.push(Ident::new(
+                    &raw_ident,
+                    TyKind::Lookup,
+                    IdentCtx::Ref,
+                    self.new_loc(self.tok.span))
+                );
+                span = span.to(&self.tok.span);
+                raw_ident = self.expect_id("identfier")?;
+            } else {
+                break;
+            }
+        }
+        let mut ident = Ident::new(
+            &raw_ident,
+            TyKind::Lookup,
+            IdentCtx::Ref,
+            self.new_loc(span),
+        );
+        if !qualifier.is_empty() {
+            ident.set_qualifier(qualifier);
+        }
+        Ok(ident)
+    }
+
     /// Parses a basic identifier or a function call if the identifier is followed by opening
     /// parenthesis.
-    fn parse_ident_or_call(&mut self, ident: &String) -> Result<Expr> {
+    fn parse_ident_or_call(&mut self, first_ident: &String) -> Result<Expr> {
         let mut expr_span = self.tok.span;
-        self.advance()?; // skip id token
+        let mut ident = self.parse_ident(first_ident)?;
         let expr_kind = match self.tok.kind {
-            TokenKind::Delim(DelimKind::ScopeSep) => todo!("parse me"),
             TokenKind::BraceOpen(BraceKind::Paren) => {
                 let open_paren_span = self.tok.span;
                 self.advance()?; // skip opening parenthesis
                 let args = self.parse_comma_sep_expr()?;
                 let close_paren_span = self.tok.span;
                 self.eat(TokenKind::BraceClosed(BraceKind::Paren))?;
-                let ident_span = expr_span;
                 expr_span = open_paren_span.to(&close_paren_span);
-                ExprKind::Call(
-                    Ident::new(
-                        ident,
-                        TyKind::Lookup,
-                        IdentCtx::FuncCall,
-                        self.new_loc(ident_span),
-                    ),
-                    args,
-                )
+                ident.update_ctx(IdentCtx::FuncCall);
+                ExprKind::Call(ident, args)
             }
             _ => 
-                ExprKind::Id(
-                    Ident::new(
-                        ident,
-                        TyKind::Lookup,
-                        IdentCtx::Ref,
-                        self.new_loc(expr_span),
-                    )
-                )
+                ExprKind::Id(ident)
         };
 
         Ok(Expr::new(expr_kind, self.new_loc(expr_span)))

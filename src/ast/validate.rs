@@ -66,7 +66,7 @@ impl Scope {
     /// If the key is not present, `None` is returned. If the key is present, a reference to it is
     /// returned.
     pub fn query(&self, ident: &Ident) -> Option<&IdentEntry> {
-        self.inner.get(ident.raw())
+        self.inner.get(ident.get_raw())
     }
 
     /// Inserts an `IdentEntry` into the scope.
@@ -74,7 +74,7 @@ impl Scope {
     /// If insertion was successful, `None` is returned. If insertion failed, i.e. the entry
     /// already exists, a reference to the conflicting entry is returned.
     pub fn insert(&mut self, entry: IdentEntry) -> Option<&IdentEntry> {
-        match self.inner.try_insert(entry.ident.raw().clone(), entry.clone()) {
+        match self.inner.try_insert(entry.ident.get_raw().clone(), entry.clone()) {
             Err(_) => self.query(&entry.ident), // return the conflicting entry
             Ok(_) => None,
         }
@@ -207,7 +207,7 @@ impl<'a> Validator<'_> {
             ).into())
         }
         self.symb_tab.pop_scope();
-        Ok(*func.ident.ty_kind())
+        Ok(func.ident.ty_kind().clone())
     }
 
     fn symb_tab_insert(&mut self, entry: IdentEntry) -> Result {
@@ -220,7 +220,7 @@ impl<'a> Validator<'_> {
     fn symb_tab_query(&mut self, ident: &mut Ident) -> Result<&IdentEntry> {
         match self.symb_tab.try_query(ident) {
             Some(def_entry) => {
-                ident.update_ty(def_entry.ident.ty_kind);
+                ident.update_ty(def_entry.ident.ty_kind.clone());
                 Ok(def_entry)
             },
             None => Err(CortexError::illegal_ident(&self.ctx, &ident, None).into()),
@@ -231,13 +231,13 @@ impl<'a> Validator<'_> {
     fn validate_expr(&mut self, expr: &mut Expr) -> Result<TyKind> {
         let mut loc = expr.loc().clone();
         match expr.kind {
-            ExprKind::Id(ref mut ident) => self.symb_tab_query(ident).and_then(|entry| Ok(*entry.ident.ty_kind())),
+            ExprKind::Id(ref mut ident) => self.symb_tab_query(ident).and_then(|entry| Ok(entry.ident.ty_kind().clone())),
             ExprKind::Lit(ref lit_kind) => Ok(self.validate_lit(lit_kind)),
             ExprKind::Binary(ref op_kind, ref mut lhs, ref mut rhs) => self.validate_bin_op(op_kind, lhs, rhs),
             ExprKind::Unary(ref unary_op_kind, ref mut expr) => self.validate_unary_op(unary_op_kind, expr),
             ExprKind::Call(ref mut ident, ref mut args) => {
                 let func_entry = self.symb_tab_query(ident)?.clone();
-                let func_ty_kind = *func_entry.ident.ty_kind();
+                let func_ty_kind = func_entry.ident.ty_kind().clone();
                 match func_entry.kind {
                     IdentEntryKind::Var | IdentEntryKind::Enum =>
                         return Err(CortexError::illegal_ident_call(&self.ctx, loc, &func_entry.ident).into()),
@@ -324,7 +324,7 @@ impl<'a> Validator<'_> {
                 self.validate_expr(expr)
                     .and_then(|rhs_ty_kind| {
                         if ident.ty_kind == TyKind::Infer {
-                            ident.update_ty(rhs_ty_kind);
+                            ident.update_ty(rhs_ty_kind.clone());
                         } else {
                             if ident.ty_kind.compat(&rhs_ty_kind).is_none() {
                                 return Err(CortexError::incompat_types(self.ctx, &ident.ty_kind, &rhs_ty_kind, expr.loc().clone()).into());
@@ -408,7 +408,7 @@ impl<'a> Validator<'_> {
         };
         op_ty_kind.compat(&expr_ty_kind)
             .ok_or_else(|| CortexError::incompat_types(self.ctx, &op_ty_kind, &expr_ty_kind, expr.loc().clone()).into())
-            .and_then(|_| Ok(op_ty_kind))
+            .and_then(|_| Ok(op_ty_kind.clone()))
     }
 
     /// Helper method for validating a binary operation.

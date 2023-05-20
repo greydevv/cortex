@@ -1,6 +1,7 @@
 //! The AST objects and validator.
 
 use std::rc::Rc;
+use std::fmt;
 
 use crate::symbols::{
     TyKind,
@@ -37,6 +38,7 @@ pub enum IdentCtx {
 #[derive(PartialEq, Clone)]
 pub struct Ident {
     raw: String,
+    qualifier: Option<Vec<Ident>>,
     ty_kind: TyKind,
     ctx: IdentCtx,
     loc: SourceLoc,
@@ -44,17 +46,22 @@ pub struct Ident {
 
 impl Ident {
     /// Creates an identifier.
-    pub fn new(ident: &String, ty_kind: TyKind, ctx: IdentCtx, loc: SourceLoc) -> Ident {
+    pub fn new(raw: &String, ty_kind: TyKind, ctx: IdentCtx, loc: SourceLoc) -> Ident {
         Ident {
-            raw: ident.clone(),
+            raw: raw.clone(),
+            qualifier: None,
             ty_kind,
             ctx,
             loc,
         }
     }
 
+    pub fn set_qualifier(&mut self, qualifier: Vec<Ident>) {
+        self.qualifier = Some(qualifier);
+    }
+
     /// Gets the raw identifier.
-    pub fn raw(&self) -> &String {
+    pub fn get_raw(&self) -> &String {
         &self.raw
     }
 
@@ -66,6 +73,10 @@ impl Ident {
     /// Sets the identifier's type.
     pub fn update_ty(&mut self, ty_kind: TyKind) {
         self.ty_kind = ty_kind;
+    }
+
+    pub fn update_ctx(&mut self, ctx: IdentCtx) {
+        self.ctx = ctx;
     }
 
     /// Gets the identifier's context.
@@ -98,6 +109,12 @@ impl Ident {
             // wrapper enum, one for definitions and another for references).
             _ => unimplemented!(),
         }.to_string()
+    }
+}
+
+impl fmt::Display for Ident {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "{}", self.raw)
     }
 }
 
@@ -266,19 +283,19 @@ pub struct Enum {
 impl AstDebug for Enum {
     fn debug(&self, indent: Indent) -> String {
         format!("({})\n{}",
-            self.ident.raw(),
+            self.ident,
             self.members.iter()
                 .enumerate()
-                .map(|(i, e)| -> String {
+                .map(|(i, ident)| -> String {
                     if i == self.members.len() - 1 {
                         format!("{}{}",
                             indent,
-                            e.raw(),
+                            ident,
                         )
                     } else {
                         format!("{}{}\n",
                             indent,
-                            e.raw(),
+                            ident,
                         )
                     }
                 })
@@ -297,7 +314,7 @@ impl Enum {
 
     pub fn get_member(&self, member: &Ident) -> Option<&Ident> {
         for m in &self.members {
-            if m.raw() == member.raw() {
+            if m.get_raw() == member.get_raw() {
                 return Some(m);
             }
         }
@@ -455,7 +472,7 @@ impl AstDebug for Stmt {
                 format!("{}{}({}: {})\n{}",
                     indent,
                     self.kind,
-                    ident.raw(),
+                    ident,
                     ident.ty_kind(),
                     expr.debug(indent.plus()),
                 ),
@@ -560,7 +577,7 @@ impl AstDebug for Expr {
                 format!("{}{}({}, {}, {})",
                     indent,
                     self.kind,
-                    ident.raw(),
+                    ident,
                     ident.ty_kind(),
                     ident.ctx(),
                 ),
@@ -569,13 +586,13 @@ impl AstDebug for Expr {
                 format!("{}{}({})",
                     indent,
                     self.kind,
-                    ident.raw()
+                    ident,
                 ),
             ExprKind::Call(ident, args) =>
                 format!("{}{}({})\n{}",
                     indent,
                     self.kind,
-                    ident.raw(),
+                    ident,
                     args.iter()
                         .enumerate()
                         .map(|(i, arg)| -> String {
@@ -603,9 +620,9 @@ impl AstDebug for ScopeRes {
             .enumerate()
             .map(|(i, ident)| -> String {
                 if i == self.idents.len() - 1 { 
-                    format!("{}{}", indent, ident.raw())
+                    format!("{}{}", indent, ident)
                 } else { 
-                    format!("{}{}::", indent, ident.raw())
+                    format!("{}{}::", indent, ident)
                 }
             })
             .collect::<String>()
@@ -622,7 +639,7 @@ impl AstDebug for Func {
     fn debug(&self, indent: Indent) -> String {
         format!(
             "({ident}) -> {ret_ty}{body}",
-            ident = self.ident.raw(),
+            ident = self.ident,
             ret_ty = self.ident.ty_kind(),
             body = self.body.debug(indent.plus())
         )
