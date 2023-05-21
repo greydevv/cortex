@@ -18,7 +18,13 @@ use crate::io::file::{
     FileSpan,
     SourceLoc
 };
-use crate::symbols::{ Token, Len, TyKind };
+use crate::symbols::{
+    Token,
+    Len,
+    TyKind,
+    BinOpKind,
+    Literal,
+};
 use crate::sess::SessCtx;
 
 /// Result alias used throughout compilation stages.
@@ -131,12 +137,23 @@ impl CortexError {
         ).into()
     }
 
+    /// Creates an error describing a type mismatch.
     pub fn incompat_types(ctx: &SessCtx, expected_ty: &TyKind, received_ty: &TyKind, expr_loc: SourceLoc) -> CortexError {
         Diagnostic::new_with_spans(
             ctx,
             format!("expected type '{}' but got type '{}'", *expected_ty, *received_ty),
             DiagnosticKind::Error,
             vec![expr_loc]
+        ).into()
+    }
+
+    /// Creates an error describing an invalid application of a binary operator to a certain type.
+    pub fn incompat_types_in_bin_op(ctx: &SessCtx, bin_op_kind: &BinOpKind, received_ty: &TyKind, expr_loc: SourceLoc) -> CortexError {
+        Diagnostic::new_with_spans(
+            ctx,
+            format!("binary operator '{}' cannot be applied to operand of type '{}'", bin_op_kind.literal(), received_ty),
+            DiagnosticKind::Error,
+            vec![expr_loc],
         ).into()
     }
 
