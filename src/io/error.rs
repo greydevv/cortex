@@ -312,8 +312,6 @@ impl CortexError {
                 conflict,
                 conflict.pretty_ctx(),
             );
-            // TODO: Safe to unwrap here? Any paths to this method should always exist as this
-            // method is called during the semantic checking phase.
             diags.push(Diagnostic::new_with_spans(
                 ctx,
                 help_msg,
@@ -321,7 +319,6 @@ impl CortexError {
                 vec![conflict.loc().clone()],
             ))
         }
-
         CortexError::from(diags)
     }
 }
@@ -424,7 +421,7 @@ impl Diagnostic {
                     .unwrap_or_else(|| "")
                     .to_string()
             } else {
-                // TODO: Unwrapping should be safe here because no error with a span should be
+                // Unwrapping should be safe here because no error with a span should be
                 // thrown before that file's existence is verified (by the parser).
                 FileHandler::new(loc.file_path().deref().clone())
                     .unwrap()

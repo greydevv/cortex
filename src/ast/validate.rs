@@ -192,12 +192,12 @@ impl<'a> Validator<'_> {
                 self.symb_tab_insert(p.clone())
             })?;
         let body_ret_ty = self.validate_compound(&mut func.body, true)?;
-        // Check if the function's return type was satisfied
-        if body_ret_ty != *func.ident.ty_kind() {
+        // Check if the function's return type was satisfied.
+        if func.ident.ty_kind().compat(&body_ret_ty).is_none() {
             let ret_span = match func.body.get_break_stmt() {
-                // TODO: Optimize this use of loc().
+                // Underline the return statement.
                 Some(ref stmt) => *stmt.loc().span(),
-                // Underline the closing brace to show a missing return statement
+                // Underline the closing brace to show a missing return statement.
                 None => func.body.span().end(),
             };
             let loc = SourceLoc::new(self.ctx.file_path(), ret_span);
@@ -411,7 +411,6 @@ impl<'a> Validator<'_> {
 
     /// Validates an enumeration definition.
     fn validate_enum(&mut self, enumer: &mut Enum) -> Result {
-        // TODO: Add enum members.
         let enum_member_symbols = enumer.members.iter()
             .map(|m: &Ident| -> Symbol {
                 Symbol::new_unqual(m.clone())
