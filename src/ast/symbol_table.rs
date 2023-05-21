@@ -77,14 +77,17 @@ impl SymbolTable {
             .unwrap_or_else(|| &mut self.global)
     }
 
-
-    pub fn query(&self, info: &IdentInfo) -> Option<&Symbol> {
+    pub fn query_raw(&self, name: &String) -> Option<&Symbol> {
         for scope in &self.nested {
-            if let Some(symbol) = scope.query(&info.name) {
+            if let Some(symbol) = scope.query(&name) {
                 return Some(symbol)
             }
         }
-        self.global.query(&info.name)
+        self.global.query(&name)
+    }
+
+    pub fn query(&self, info: &IdentInfo) -> Option<&Symbol> {
+        self.query_raw(&info.name)
     }
 
     // pub fn query(&self, info: &IdentInfo) -> Option<&Symbol> {
