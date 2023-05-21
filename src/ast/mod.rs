@@ -16,6 +16,7 @@ use crate::io::file::{
 };
 
 pub mod validate;
+mod symbol_table;
 
 /// The context of an identifier.
 #[derive(PartialEq, Clone, Copy, strum_macros::Display)]
@@ -36,34 +37,28 @@ pub enum IdentCtx {
 
 /// The identifier object.
 #[derive(PartialEq, Clone)]
-pub struct Ident {
-    raw: String,
-    qualifier: Option<Vec<Ident>>,
+pub struct IdentInfo {
+    name: String,
     ty_kind: TyKind,
     ctx: IdentCtx,
     loc: SourceLoc,
 }
 
-impl Ident {
+impl IdentInfo {
     /// Creates an identifier.
-    pub fn new(raw: &String, ty_kind: TyKind, ctx: IdentCtx, loc: SourceLoc) -> Ident {
-        Ident {
-            raw: raw.clone(),
-            qualifier: None,
+    pub fn new(name: String, ty_kind: TyKind, ctx: IdentCtx, loc: SourceLoc) -> IdentInfo {
+        IdentInfo {
+            name,
             ty_kind,
             ctx,
             loc,
         }
     }
 
-    pub fn set_qualifier(&mut self, qualifier: Vec<Ident>) {
-        self.qualifier = Some(qualifier);
-    }
-
     /// Gets the raw identifier.
-    pub fn get_raw(&self) -> &String {
-        &self.raw
-    }
+    // pub fn get_raw(&self) -> &String {
+    //     &self.raw
+    // }
 
     /// Gets the identifier's type.
     pub fn ty_kind(&self) -> &TyKind {
@@ -75,8 +70,12 @@ impl Ident {
         self.ty_kind = ty_kind;
     }
 
-    pub fn update_ctx(&mut self, ctx: IdentCtx) {
+    pub fn set_ctx(&mut self, ctx: IdentCtx) {
         self.ctx = ctx;
+    }
+
+    pub fn set_ty_kind(&mut self, ty_kind: TyKind) {
+        self.ty_kind = ty_kind;
     }
 
     /// Gets the identifier's context.
@@ -112,9 +111,77 @@ impl Ident {
     }
 }
 
+impl fmt::Display for IdentInfo {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "{}", self.name)
+    }
+}
+
+#[derive(PartialEq, Clone)]
+pub enum Ident {
+    Unqual(IdentInfo),
+    // TODO: Need to capture first_info.span().to(second_info.span()) in errors.
+    Qual(IdentInfo, IdentInfo),
+}
+
+impl Ident {
+    pub fn new_unqual(info: IdentInfo) -> Ident {
+        Ident::Unqual(info)
+    }
+
+    pub fn new_qual(qual_info: IdentInfo, info: IdentInfo) -> Ident {
+        Ident::Qual(qual_info, info)
+    }
+
+    fn info(&self) -> &IdentInfo {
+        match self {
+            Ident::Unqual(ref info) => &info,
+            Ident::Qual(_, ref info) => &info,
+        }
+    }
+
+    fn info_mut(&mut self) -> &mut IdentInfo {
+        match self {
+            Ident::Unqual(ref mut info) => info,
+            Ident::Qual(_, ref mut info) => info,
+        }
+    }
+
+    pub fn name(&self) -> &String {
+        &self.info().name
+    }
+
+    pub fn ctx(&self) -> &IdentCtx {
+        &self.info().ctx
+    }
+
+    pub fn ty_kind(&self) -> &TyKind {
+        &self.info().ty_kind
+    }
+
+    pub fn set_ty_kind(&mut self, ty_kind: TyKind) {
+        self.info_mut().set_ty_kind(ty_kind)
+    }
+
+    pub fn loc(&self) -> &SourceLoc {
+        &self.info().loc
+    }
+
+    pub fn set_ctx(&mut self, ctx: IdentCtx) {
+        self.info_mut().set_ctx(ctx)
+    }
+
+    pub fn pretty_ctx(&self) -> String {
+        self.info().pretty_ctx()
+    }
+}
+
 impl fmt::Display for Ident {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "{}", self.raw)
+        match self {
+            Ident::Unqual(ref info) => write!(f, "{}", info.name),
+            Ident::Qual(ref qual_info, ref info) => write!(f, "{}::{}", qual_info.name, info.name),
+        }
     }
 }
 
@@ -314,7 +381,7 @@ impl Enum {
 
     pub fn get_member(&self, member: &Ident) -> Option<&Ident> {
         for m in &self.members {
-            if m.get_raw() == member.get_raw() {
+            if m.name() == member.name() {
                 return Some(m);
             }
         }
@@ -323,6 +390,10 @@ impl Enum {
 
     pub fn add_member(&mut self, member: Ident) {
         self.members.push(member)
+    }
+
+    pub fn ident(&self) -> &Ident {
+        &self.ident
     }
 }
 
