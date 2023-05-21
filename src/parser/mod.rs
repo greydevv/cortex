@@ -96,7 +96,7 @@ impl<'a> Parser<'_> {
             Ident::new_unqual(
                 IdentInfo::new(
                     ident_string.clone(),
-                    TyKind::UserDef(ident_string),
+                    TyKind::UserDef(ident_string, self.new_loc(ident_span)),
                     IdentCtx::EnumDef,
                     self.new_loc(ident_span),
                 )
@@ -304,28 +304,42 @@ impl<'a> Parser<'_> {
         Ok(Stmt::new(kind, self.new_loc(if_kwd_span.to(&self.prev_tok.span))))
     }
 
+    // Parses a built-in or user-defined type.
+    fn parse_type(&mut self) -> Result<TyKind> {
+        match self.tok.kind.clone() {
+            TokenKind::Ty(ty_kind) => {
+                // skip type
+                self.advance()?;
+                Ok(ty_kind)
+            },
+            TokenKind::Id(ident_string) => {
+                // skip id
+                let span = self.tok.span;
+                self.advance()?;
+                Ok(TyKind::UserDef(ident_string, self.new_loc(span)))
+            },
+            _ =>
+                Err(CortexError::expected_but_got(
+                    &self.ctx,
+                    "type",
+                    &self.tok,
+                ).into())
+        }
+    }
+
     /// Parses a type annotation, e.g., `x: i32`.
     fn parse_type_annotation(&mut self, with_ident_ctx: IdentCtx) -> Result<Ident> {
         let ident_span = self.tok.span;
         let ident = self.expect_id("identifier")?;
         self.eat(TokenKind::Delim(DelimKind::Colon))?;
-        if let TokenKind::Ty(ty_kind) = self.tok.kind.clone() {
-            self.advance()?; // skip type
-            Ok(Ident::new_unqual(
-                IdentInfo::new(
-                    ident,
-                    ty_kind,
-                    with_ident_ctx,
-                    self.new_loc(ident_span))
-                )
+        Ok(Ident::new_unqual(
+            IdentInfo::new(
+                ident,
+                self.parse_type()?,
+                with_ident_ctx,
+                self.new_loc(ident_span))
             )
-        } else {
-            Err(CortexError::expected_but_got(
-                &self.ctx,
-                "type",
-                &self.tok,
-            ).into())
-        }
+        )
     }
 
     /// Parses a return statement.
