@@ -504,13 +504,13 @@ impl<'a> Parser<'_> {
     fn parse_ident(&mut self, first_ident: &String) -> Result<Ident> {
         let mut span = self.tok.span;
         let mut raw_ident = first_ident.clone();
-        let mut qualifier = None;
+        let mut qual_info = None;
         // skip id token
         self.advance()?;
         if self.tok.kind == TokenKind::Delim(DelimKind::ScopeSep) {
             // skip scope separator ('::')
             self.advance()?;
-            qualifier = Some(IdentInfo::new(
+            qual_info = Some(IdentInfo::new(
                 raw_ident,
                 TyKind::Lookup,
                 IdentCtx::Ref,
@@ -542,7 +542,7 @@ impl<'a> Parser<'_> {
         //         break;
         //     }
         // }
-        let ident = match qualifier {
+        let ident = match qual_info {
             Some(qual_info) => Ident::new_qual(qual_info, info),
             None => Ident::new_unqual(info),
         };
