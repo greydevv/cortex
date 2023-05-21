@@ -291,7 +291,21 @@ impl<'a> Validator<'_> {
                                 .zip(expected_args)
                                 .try_for_each(|(arg, expected_arg)| -> Result {
                                     let arg_ty_kind = self.validate_expr(arg)?;
-                                    if &arg_ty_kind != expected_arg.ident().ty_kind() {
+                                    let type_ok = match expected_arg.ident().ty_kind() {
+                                        TyKind::UserDef(ty_string, _) => {
+                                            if let TyKind::UserDef(ref arg_ty_string, ..) = arg_ty_kind {
+                                                // Both types are user-defined, check if they
+                                                // match.
+                                                arg_ty_string == ty_string
+                                            } else {
+                                                // If one type isn't user defined, we know they
+                                                // don't match.
+                                                false
+                                            }
+                                        },
+                                        _ => &arg_ty_kind == expected_arg.ident().ty_kind(),
+                                    };
+                                    if !type_ok {
                                         Err(CortexError::incompat_types(&self.ctx, &expected_arg.ident().ty_kind(), &arg_ty_kind, arg.loc().clone()).into())
                                     } else {
                                         Ok(())
