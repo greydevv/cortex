@@ -214,6 +214,32 @@ impl CortexError {
         ).into()
     }
 
+    /// Creates an error describing the case of `let foo: bar = ...` where `bar` not a typedef.
+    pub fn not_typedef(ctx: &SessCtx, name: &String, loc: &SourceLoc) -> CortexError {
+        Diagnostic::new_with_spans(
+            ctx,
+            format!("'{}' is not a type", name),
+            DiagnosticKind::Error,
+            vec![loc.clone()],
+        ).into()
+    }
+
+    /// Creates an error describing the case of `let foo: Bar = ...` where `Bar` is an unknown
+    /// typedef.
+    ///
+    /// This method is different from `CortexError::not_typedef` because `Bar` may be a typedef; it
+    /// just isn't in scope.
+    pub fn unknown_typedef(ctx: &SessCtx, name: &String, loc: &SourceLoc) -> CortexError {
+        Diagnostic::new_with_spans(
+            ctx,
+            format!("unknown type '{}'", name),
+            DiagnosticKind::Error,
+            vec![loc.clone()],
+        ).into()
+    }
+
+    /// Creates an error describing the case of `Foo::Bar` where `Foo` is an enum that does not
+    /// define the member 'Bar'.
     pub fn nonexistent_enum_member(ctx: &SessCtx, qual_info: &IdentInfo, info: &IdentInfo) -> CortexError {
         Diagnostic::new_with_spans(
             ctx,
@@ -223,6 +249,7 @@ impl CortexError {
         ).into()
     }
 
+    /// Creates an error describing the case of `Foo::Bar` where `Foo` is not an enum.
     pub fn not_enum(ctx: &SessCtx, qual_info: &IdentInfo) -> CortexError {
         Diagnostic::new_with_spans(
             ctx,
