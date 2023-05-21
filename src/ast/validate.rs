@@ -220,20 +220,6 @@ impl<'a> Validator<'_> {
     }
 
     fn symb_tab_query(&mut self, ident: &mut Ident) -> Result<&Symbol> {
-        // match ident {
-        //     Ident::Qual(ref qual_info, ref info) => {
-        //     }
-        // }
-        // match self.symb_tab.query(ident.info()) {
-        //     Some(def_entry) => {
-        //         if let Ident::Qual(..) = def_entry.ident() {
-        //             println!("FOUND QUALIFIED IDENT: {}", def_entry.ident());
-        //         }
-        //         ident.set_ty_kind(def_entry.ident().ty_kind().clone());
-        //         Ok(def_entry)
-        //     },
-        //     None => Err(CortexError::illegal_ident(&self.ctx, &ident, None).into()),
-        // }
         match ident {
             Ident::Unqual(ref info) =>
                 // Here we have the case 'foo'.
@@ -292,7 +278,7 @@ impl<'a> Validator<'_> {
                                 .try_for_each(|(arg, expected_arg)| -> Result {
                                     let arg_ty_kind = self.validate_expr(arg)?;
                                     let type_ok = match expected_arg.ident().ty_kind() {
-                                        TyKind::UserDef(ty_string, _) => {
+                                        TyKind::UserDef(ty_string) => {
                                             if let TyKind::UserDef(ref arg_ty_string, ..) = arg_ty_kind {
                                                 // Both types are user-defined, check if they
                                                 // match.
@@ -306,6 +292,7 @@ impl<'a> Validator<'_> {
                                         _ => &arg_ty_kind == expected_arg.ident().ty_kind(),
                                     };
                                     if !type_ok {
+                                        println!("Before error: {}", arg.loc().span());
                                         Err(CortexError::incompat_types(&self.ctx, &expected_arg.ident().ty_kind(), &arg_ty_kind, arg.loc().clone()).into())
                                     } else {
                                         Ok(())
@@ -385,15 +372,15 @@ impl<'a> Validator<'_> {
                     .and_then(|rhs_ty_kind| {
                         match ident.ty_kind() {
                             TyKind::Infer => ident.set_ty_kind(rhs_ty_kind.clone()),
-                            TyKind::UserDef(ty_string, ty_loc) => {
+                            TyKind::UserDef(ty_string) => {
                                 match self.symb_tab.query_raw(ty_string) {
                                     Some(symbol) =>
                                         if symbol.ident().ctx().is_typedef() {
                                             ident.set_ty_kind(symbol.ident().ty_kind().clone());
                                         } else {
-                                            return Err(CortexError::not_typedef(&self.ctx, ty_string, ty_loc).into());
+                                            return Err(CortexError::not_typedef(&self.ctx, ty_string, ident.loc()).into());
                                         },
-                                    None => return Err(CortexError::unknown_typedef(&self.ctx, ty_string, ty_loc).into()),
+                                    None => return Err(CortexError::unknown_typedef(&self.ctx, ty_string, ident.loc()).into()),
                                 }
                             },
                             _ => {
@@ -504,6 +491,25 @@ impl<'a> Validator<'_> {
                 | BinOpKind::Mul
                 | BinOpKind::Div => TyKind::Int(IntSize::N32),
         };
+
+        if lhs_ty != op_ty {
+            return Err(CortexError::incompat_types_in_bin_op(
+                &self.ctx,
+                bin_op_kind, 
+                &lhs_ty,
+                lhs.loc().clone(),
+            ).into());
+        }
+
+        if rhs_ty != op_ty {
+            return Err(CortexError::incompat_types_in_bin_op(
+                &self.ctx,
+                bin_op_kind, 
+                &rhs_ty,
+                rhs.loc().clone(),
+            ).into());
+        }
+
         Ok(op_ty)
     }
 }

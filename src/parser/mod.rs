@@ -96,7 +96,7 @@ impl<'a> Parser<'_> {
             Ident::new_unqual(
                 IdentInfo::new(
                     ident_string.clone(),
-                    TyKind::UserDef(ident_string, self.new_loc(ident_span)),
+                    TyKind::UserDef(ident_string),
                     IdentCtx::EnumDef,
                     self.new_loc(ident_span),
                 )
@@ -314,9 +314,8 @@ impl<'a> Parser<'_> {
             },
             TokenKind::Id(ident_string) => {
                 // skip id
-                let span = self.tok.span;
                 self.advance()?;
-                Ok(TyKind::UserDef(ident_string, self.new_loc(span)))
+                Ok(TyKind::UserDef(ident_string))
             },
             _ =>
                 Err(CortexError::expected_but_got(
@@ -393,9 +392,9 @@ impl<'a> Parser<'_> {
             ).into())
         }?;
         self.eat(TokenKind::BinOp(BinOpKind::Eql))?;
-        // A bit hacky, but works for now. essentially, the left-hand side of the let
-        // expression is parsed here instead of self.parse_expr() so the type annotation can be
-        // captured properly. Then, an expr is just returned anyways.
+        // A bit hacky, but works for now. Essentially, the left-hand side of the let expression is
+        // parsed here instead of self.parse_expr() so the type annotation can be captured
+        // properly. Then, an expr is just returned anyways.
         let expr = self.parse_expr()?;
         let span = let_kwd_span.to(expr.loc().span());
         self.eat(TokenKind::Delim(DelimKind::Scolon))?;
@@ -425,7 +424,7 @@ impl<'a> Parser<'_> {
         let ret_ty = match &self.tok.kind {
             TokenKind::Arrow => {
                 self.advance()?;
-                self.expect_ty()?
+                self.parse_type()?
             },
             TokenKind::BraceOpen(BraceKind::Curly) => {
                 TyKind::Void
@@ -479,9 +478,7 @@ impl<'a> Parser<'_> {
                     Box::new(expr)
                 ), self.new_loc(span)));
             },
-            TokenKind::Id(ref id) => {
-                return self.parse_ident_or_call(id)
-            }
+            TokenKind::Id(_) => return self.parse_ident_or_call(),
             TokenKind::BraceOpen(ref brace_kind) if *brace_kind == BraceKind::Paren => {
                 // pass opening parenthesis
                 self.advance()?;
@@ -501,9 +498,9 @@ impl<'a> Parser<'_> {
         Ok(node)
     }
 
-    fn parse_ident(&mut self, first_ident: &String) -> Result<Ident> {
+    fn parse_ident(&mut self) -> Result<Ident> {
         let mut span = self.tok.span;
-        let mut raw_ident = first_ident.clone();
+        let mut raw_ident = self.tok.value();
         let mut qual_info = None;
         // skip id token
         self.advance()?;
@@ -526,22 +523,6 @@ impl<'a> Parser<'_> {
             IdentCtx::Ref,
             self.new_loc(span),
         );
-        // loop {
-        //     if self.tok.kind == TokenKind::Delim(DelimKind::ScopeSep) {
-        //         // skip scope separator ('::')
-        //         self.advance()?;
-        //         qualifier.push(Ident::new(
-        //             &raw_ident,
-        //             TyKind::Lookup,
-        //             IdentCtx::Ref,
-        //             self.new_loc(self.tok.span))
-        //         );
-        //         span = span.to(&self.tok.span);
-        //         raw_ident = self.expect_id("identfier")?;
-        //     } else {
-        //         break;
-        //     }
-        // }
         let ident = match qual_info {
             Some(qual_info) => Ident::new_qual(qual_info, info),
             None => Ident::new_unqual(info),
@@ -551,25 +532,29 @@ impl<'a> Parser<'_> {
 
     /// Parses a basic identifier or a function call if the identifier is followed by opening
     /// parenthesis.
-    fn parse_ident_or_call(&mut self, first_ident: &String) -> Result<Expr> {
-        let mut expr_span = self.tok.span;
-        let mut ident = self.parse_ident(first_ident)?;
-        let expr_kind = match self.tok.kind {
+    fn parse_ident_or_call(&mut self) -> Result<Expr> {
+        let mut ident = self.parse_ident()?;
+        match self.tok.kind {
             TokenKind::BraceOpen(BraceKind::Paren) => {
                 let open_paren_span = self.tok.span;
                 self.advance()?; // skip opening parenthesis
                 let args = self.parse_comma_sep_expr()?;
                 let close_paren_span = self.tok.span;
                 self.eat(TokenKind::BraceClosed(BraceKind::Paren))?;
-                expr_span = open_paren_span.to(&close_paren_span);
                 ident.set_ctx(IdentCtx::FuncCall);
-                ExprKind::Call(ident, args)
+                Ok(Expr::new(
+                    ExprKind::Call(ident, args),
+                    self.new_loc(open_paren_span.to(&close_paren_span)),
+                ))
             }
-            _ => 
-                ExprKind::Id(ident)
-        };
-
-        Ok(Expr::new(expr_kind, self.new_loc(expr_span)))
+            _ => {
+                let ident_span = ident.span();
+                Ok(Expr::new(
+                    ExprKind::Id(ident),
+                    self.new_loc(ident_span),
+                ))
+            }
+        }
     }
 
     /// Parses a comma separated list of expressions, such as expressions passed as arguments to
@@ -578,7 +563,6 @@ impl<'a> Parser<'_> {
         let mut exprs = Vec::new();
         loop {
             if let TokenKind::BraceClosed(BraceKind::Paren) = self.tok.kind {
-                // self.advance()?; // skip closing parenthesis
                 break;
             }
             exprs.push(Box::new(self.parse_expr()?));
@@ -640,21 +624,6 @@ impl<'a> Parser<'_> {
         let result = match &self.tok.kind {
             TokenKind::Id(ident) => Ok(ident.to_owned()),
             _ => Err(CortexError::expected_but_got(self.ctx, with_msg, &self.tok).into())
-        };
-        self.advance()?;
-        result
-    }
-
-    /// Expects to see a type and returns an error if none is found.
-    fn expect_ty(&mut self) -> Result<TyKind> {
-        let result = match &self.tok.kind {
-            TokenKind::Ty(ty_kind) => Ok(ty_kind.to_owned()),
-            _ => 
-                Err(CortexError::expected_but_got(
-                    &self.ctx,
-                    "type",
-                    &self.tok,
-                ).into()),
         };
         self.advance()?;
         result
