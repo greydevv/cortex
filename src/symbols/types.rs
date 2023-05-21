@@ -3,6 +3,7 @@
 use std::fmt;
 
 use crate::symbols::{ Literal, MaybeFrom };
+use crate::io::file::SourceLoc;
 
 /// The various kinds of built-in types recognized by the compiler.
 #[derive(PartialEq, Clone, Debug)]
@@ -14,7 +15,9 @@ pub enum TyKind {
     Void,
     Infer,
     Lookup,
-    UserDef(String),
+    // TODO: This is kind of an ugly way to capture the span of the type. Using IdentInfo would
+    // incur a recursive definition.
+    UserDef(String, SourceLoc),
 }
 
 impl TyKind {
@@ -43,7 +46,7 @@ impl Literal for TyKind {
             TyKind::Void => String::from("void"),
             TyKind::Infer => String::from("Infer"),
             TyKind::Lookup => String::from("Lookup"),
-            TyKind::UserDef(name) => name.to_string(),
+            TyKind::UserDef(name, _) => name.to_string(),
         }
     }
 }
