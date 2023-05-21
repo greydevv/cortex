@@ -129,11 +129,17 @@ impl fmt::Display for IdentInfo {
 #[derive(PartialEq, Clone)]
 pub enum Ident {
     Unqual(IdentInfo),
-    // TODO: Need to capture first_info.span().to(second_info.span()) in errors.
     Qual(IdentInfo, IdentInfo),
 }
 
 impl Ident {
+    pub fn span(&self) -> FileSpan {
+        match self {
+            Ident::Unqual(ref info) => *info.span(),
+            Ident::Qual(ref qual_info, ref info) => qual_info.span().to(info.span()),
+        }
+    }
+
     pub fn new_unqual(info: IdentInfo) -> Ident {
         Ident::Unqual(info)
     }
@@ -220,7 +226,7 @@ impl Func {
 #[derive(Clone)]
 pub struct Expr {
     /// The kind of expression.
-    kind: ExprKind,
+    pub kind: ExprKind,
     /// The location of the entire expression.
     loc: SourceLoc,
 }
