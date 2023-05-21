@@ -11,7 +11,7 @@ use colored::Colorize;
 use clap::error::ErrorKind as ClapErrorKind;
 use clap::error::Error as ClapError;
 
-use crate::ast::{ Ident, IdentCtx };
+use crate::ast::{ Ident, IdentInfo, IdentCtx };
 use crate::io::file::{
     FileHandler,
     FilePath,
@@ -214,26 +214,44 @@ impl CortexError {
         ).into()
     }
 
+    pub fn nonexistent_enum_member(ctx: &SessCtx, qual_info: &IdentInfo, info: &IdentInfo) -> CortexError {
+        Diagnostic::new_with_spans(
+            ctx,
+            format!("{} is not a member of {}", info, qual_info),
+            DiagnosticKind::Error,
+            vec![info.loc().clone()],
+        ).into()
+    }
+
+    pub fn not_enum(ctx: &SessCtx, qual_info: &IdentInfo) -> CortexError {
+        Diagnostic::new_with_spans(
+            ctx,
+            format!("{} is not an enumeration", qual_info),
+            DiagnosticKind::Error,
+            vec![qual_info.loc().clone()],
+        ).into()
+    }
+
     /// Creates an error describing an illegal reference or definition of an identifier.
-    pub fn illegal_ident(ctx: &SessCtx, ident: &Ident, conflict: Option<&Ident>) -> CortexError {
-        let msg = match ident.ctx() {
+    pub fn illegal_ident(ctx: &SessCtx, info: &IdentInfo, conflict: Option<&Ident>) -> CortexError {
+        let msg = match info.ctx() {
             IdentCtx::Def
                 | IdentCtx::Param
                 | IdentCtx::FuncDef
                 | IdentCtx::EnumDef =>
                     format!(
                         "'{}' was already defined",
-                        ident,
+                        info,
                     ),
             IdentCtx::Ref =>
                     format!(
                         "variable '{}' does not exist",
-                        ident,
+                        info,
                     ),
             IdentCtx::FuncCall =>
                     format!(
                         "function '{}' does not exist",
-                        ident,
+                        info,
                     ),
         };
         let mut diags = vec![
@@ -241,7 +259,7 @@ impl CortexError {
                 ctx,
                 msg,
                 DiagnosticKind::Error,
-                vec![ident.loc().clone()],
+                vec![info.loc().clone()],
             )
         ];
         if let Some(conflict) = conflict {
