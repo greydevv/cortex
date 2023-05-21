@@ -369,11 +369,23 @@ impl<'a> Validator<'_> {
                 // validating the right-hand side of the equals sign first
                 self.validate_expr(expr)
                     .and_then(|rhs_ty_kind| {
-                        if *ident.ty_kind() == TyKind::Infer {
-                            ident.set_ty_kind(rhs_ty_kind.clone());
-                        } else {
-                            if ident.ty_kind().compat(&rhs_ty_kind).is_none() {
-                                return Err(CortexError::incompat_types(self.ctx, &ident.ty_kind(), &rhs_ty_kind, expr.loc().clone()).into());
+                        match ident.ty_kind() {
+                            TyKind::Infer => ident.set_ty_kind(rhs_ty_kind.clone()),
+                            TyKind::UserDef(ty_string, ty_loc) => {
+                                match self.symb_tab.query_raw(ty_string) {
+                                    Some(symbol) =>
+                                        if symbol.ident().ctx().is_typedef() {
+                                            ident.set_ty_kind(symbol.ident().ty_kind().clone());
+                                        } else {
+                                            return Err(CortexError::not_typedef(&self.ctx, ty_string, ty_loc).into());
+                                        },
+                                    None => return Err(CortexError::unknown_typedef(&self.ctx, ty_string, ty_loc).into()),
+                                }
+                            },
+                            _ => {
+                                if ident.ty_kind().compat(&rhs_ty_kind).is_none() {
+                                    return Err(CortexError::incompat_types(self.ctx, &ident.ty_kind(), &rhs_ty_kind, expr.loc().clone()).into());
+                                }
                             }
                         }
                         let symbol = Symbol::new_unqual(ident.clone());
