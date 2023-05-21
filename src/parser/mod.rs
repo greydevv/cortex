@@ -18,6 +18,7 @@ use crate::ast::{
     Enum,
     Expr,
     Ident,
+    IdentInfo,
     ExprKind,
     StmtKind,
     IdentCtx,
@@ -92,11 +93,13 @@ impl<'a> Parser<'_> {
         let ident_span = self.tok.span;
         let ident_string = self.expect_id("identifier")?;
         let mut enumer = Enum::new(
-            Ident::new(
-                &ident_string,
-                TyKind::UserDef(ident_string.clone()),
-                IdentCtx::EnumDef,
-                self.new_loc(ident_span),
+            Ident::new_unqual(
+                IdentInfo::new(
+                    ident_string.clone(),
+                    TyKind::UserDef(ident_string),
+                    IdentCtx::EnumDef,
+                    self.new_loc(ident_span),
+                )
             )
         );
         self.eat(TokenKind::BraceOpen(BraceKind::Curly))?;
@@ -113,11 +116,13 @@ impl<'a> Parser<'_> {
                 break;
             }
             let ident_span = self.tok.span;
-            let ident = Ident::new(
-                &self.expect_id("identifier")?,
-                TyKind::UserDef(String::from("po")),
-                IdentCtx::Def,
-                self.new_loc(ident_span),
+            let ident = Ident::new_unqual(
+                IdentInfo::new(
+                    self.expect_id("identifier")?,
+                    enumer.ident().ty_kind().clone(),
+                    IdentCtx::Def,
+                    self.new_loc(ident_span),
+                )
             );
             if let Some(original_ident) = enumer.get_member(&ident) {
                 return Err(CortexError::dupe_enum_member(
@@ -306,7 +311,14 @@ impl<'a> Parser<'_> {
         self.eat(TokenKind::Delim(DelimKind::Colon))?;
         if let TokenKind::Ty(ty_kind) = self.tok.kind.clone() {
             self.advance()?; // skip type
-            Ok(Ident::new(&ident, ty_kind, with_ident_ctx, self.new_loc(ident_span)))
+            Ok(Ident::new_unqual(
+                IdentInfo::new(
+                    ident,
+                    ty_kind,
+                    with_ident_ctx,
+                    self.new_loc(ident_span))
+                )
+            )
         } else {
             Err(CortexError::expected_but_got(
                 &self.ctx,
@@ -342,12 +354,14 @@ impl<'a> Parser<'_> {
                         self.parse_type_annotation(IdentCtx::Def),
                     TokenKind::BinOp(BinOpKind::Eql) => {
                         let ident_span = self.tok.span;
-                        Ok(Ident::new(
-                            &self.expect_id("identifier")?,
-                            TyKind::Infer,
-                            IdentCtx::Def,
-                            self.new_loc(ident_span),
-                        ))
+                        Ok(Ident::new_unqual(
+                            IdentInfo::new(
+                                self.expect_id("identifier")?,
+                                TyKind::Infer,
+                                IdentCtx::Def,
+                                self.new_loc(ident_span)),
+                            )
+                        )
                     },
                     _ =>
                         Err(CortexError::expected_but_got(
@@ -412,7 +426,14 @@ impl<'a> Parser<'_> {
         let body = self.parse_compound()?;
         let body_span = body.span().clone();
         let func = Func::new(
-            Ident::new(&func_ident, ret_ty, IdentCtx::FuncDef, self.new_loc(func_ident_span)),
+            Ident::new_unqual(
+                IdentInfo::new(
+                    func_ident,
+                    ret_ty,
+                    IdentCtx::FuncDef,
+                    self.new_loc(func_ident_span)
+                )
+            ),
             params,
             body,
         );
@@ -468,35 +489,49 @@ impl<'a> Parser<'_> {
 
     fn parse_ident(&mut self, first_ident: &String) -> Result<Ident> {
         let mut span = self.tok.span;
-        let mut qualifier = Vec::new();
         let mut raw_ident = first_ident.clone();
+        let mut qualifier = None;
         // skip id token
         self.advance()?;
-        loop {
-            if self.tok.kind == TokenKind::Delim(DelimKind::ScopeSep) {
-                // skip scope separator ('::')
-                self.advance()?;
-                qualifier.push(Ident::new(
-                    &raw_ident,
-                    TyKind::Lookup,
-                    IdentCtx::Ref,
-                    self.new_loc(self.tok.span))
-                );
-                span = span.to(&self.tok.span);
-                raw_ident = self.expect_id("identfier")?;
-            } else {
-                break;
-            }
+        if self.tok.kind == TokenKind::Delim(DelimKind::ScopeSep) {
+            // skip scope separator ('::')
+            self.advance()?;
+            qualifier = Some(IdentInfo::new(
+                raw_ident,
+                TyKind::Lookup,
+                IdentCtx::Ref,
+                self.new_loc(span),
+            ));
+            // Get next span and identifier.
+            span = self.tok.span;
+            raw_ident = self.expect_id("identifier")?;
         }
-        let mut ident = Ident::new(
-            &raw_ident,
+        let info = IdentInfo::new(
+            raw_ident,
             TyKind::Lookup,
             IdentCtx::Ref,
             self.new_loc(span),
         );
-        if !qualifier.is_empty() {
-            ident.set_qualifier(qualifier);
-        }
+        // loop {
+        //     if self.tok.kind == TokenKind::Delim(DelimKind::ScopeSep) {
+        //         // skip scope separator ('::')
+        //         self.advance()?;
+        //         qualifier.push(Ident::new(
+        //             &raw_ident,
+        //             TyKind::Lookup,
+        //             IdentCtx::Ref,
+        //             self.new_loc(self.tok.span))
+        //         );
+        //         span = span.to(&self.tok.span);
+        //         raw_ident = self.expect_id("identfier")?;
+        //     } else {
+        //         break;
+        //     }
+        // }
+        let ident = match qualifier {
+            Some(qual_info) => Ident::new_qual(qual_info, info),
+            None => Ident::new_unqual(info),
+        };
         Ok(ident)
     }
 
@@ -513,7 +548,7 @@ impl<'a> Parser<'_> {
                 let close_paren_span = self.tok.span;
                 self.eat(TokenKind::BraceClosed(BraceKind::Paren))?;
                 expr_span = open_paren_span.to(&close_paren_span);
-                ident.update_ctx(IdentCtx::FuncCall);
+                ident.set_ctx(IdentCtx::FuncCall);
                 ExprKind::Call(ident, args)
             }
             _ => 
