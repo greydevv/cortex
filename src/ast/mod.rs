@@ -35,6 +35,15 @@ pub enum IdentCtx {
     EnumDef,
 }
 
+impl IdentCtx {
+    pub fn is_typedef(&self) -> bool {
+        match self {
+            IdentCtx::EnumDef => true,
+            _ => false,
+        }
+    }
+}
+
 /// The identifier object.
 #[derive(PartialEq, Clone)]
 pub struct IdentInfo {
