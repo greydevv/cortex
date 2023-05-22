@@ -75,7 +75,8 @@ impl BinOpKind {
     /// Returns the associativity of the `BinOpKind`
     pub fn assoc(&self) -> OpAssoc {
         match *self {
-            BinOpKind::Eql => OpAssoc::Right,
+            BinOpKind::Eql
+                | BinOpKind::Dot => OpAssoc::Right,
             BinOpKind::Add
                 | BinOpKind::Sub
                 | BinOpKind::Mul
@@ -84,8 +85,7 @@ impl BinOpKind {
                 | BinOpKind::Gr
                 | BinOpKind::Lt
                 | BinOpKind::GrEql
-                | BinOpKind::LtEql
-                | BinOpKind::Dot => OpAssoc::Left,
+                | BinOpKind::LtEql => OpAssoc::Left,
         }
     }
 }
