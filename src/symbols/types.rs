@@ -12,9 +12,9 @@ pub enum TyKind {
     Bool,
     Str,
     Void,
+    UserDef(String),
     Infer,
     Lookup,
-    UserDef(String),
 }
 
 impl TyKind {
@@ -41,9 +41,9 @@ impl Literal for TyKind {
             TyKind::Bool => format!("bool"),
             TyKind::Str => format!("str"),
             TyKind::Void => String::from("void"),
+            TyKind::UserDef(name) => name.to_string(),
             TyKind::Infer => String::from("Infer"),
             TyKind::Lookup => String::from("Lookup"),
-            TyKind::UserDef(name) => name.to_string(),
         }
     }
 }
