@@ -110,12 +110,11 @@ impl IdentInfo {
     /// Converts the identifier's context into a string for use in error output.
     pub fn pretty_ctx(&self) -> String {
         match self.ctx {
-            IdentCtx::Def => "variable",
-            IdentCtx::FuncDef => "function",
+            IdentCtx::Def | IdentCtx::Ref => "variable",
             IdentCtx::Param => "parameter",
-            // TODO: This is bad :). Need another way of describing context (probably a
-            // wrapper enum, one for definitions and another for references).
-            _ => unimplemented!(),
+            IdentCtx::FuncCall => "function call",
+            IdentCtx::FuncDef => "function",
+            IdentCtx::EnumDef => "enum",
         }.to_string()
     }
 }
