@@ -189,7 +189,6 @@ impl<'a> Lexer<'_> {
     fn lex_other(&mut self) -> Result<Token> {
         let beg_pos = self.pos;
         let kind = match self.c {
-            '.' => TokenKind::Delim(DelimKind::Period),
             ',' => TokenKind::Delim(DelimKind::Comma),
             ';' => TokenKind::Delim(DelimKind::Scolon),
             ':' =>
@@ -197,6 +196,7 @@ impl<'a> Lexer<'_> {
                     ':' => TokenKind::Delim(DelimKind::ScopeSep),
                     _ => TokenKind::Delim(DelimKind::Colon),
                 },
+            '.' => TokenKind::BinOp(BinOpKind::Dot),
             '+' => TokenKind::BinOp(BinOpKind::Add),
             '-' => 
                 match self.peek_char() {
