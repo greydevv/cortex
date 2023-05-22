@@ -3,7 +3,6 @@ use crate::symbols::{ Literal, MaybeFrom };
 /// The various kinds of delimiters.
 #[derive(PartialEq, Debug, Clone)]
 pub enum DelimKind {
-    Period,
     Comma,
     Scolon,
     Colon,
@@ -14,7 +13,6 @@ pub enum DelimKind {
 impl Literal for DelimKind {
     fn literal(&self) -> String {
         match &self {
-            DelimKind::Period => String::from("."),
             DelimKind::Comma => String::from(","),
             DelimKind::Scolon => String::from(";"),
             DelimKind::Colon => String::from(":"),
@@ -56,12 +54,16 @@ pub enum BinOpKind {
     Lt,
     GrEql,
     LtEql,
+
+    // Member access.
+    Dot,
 }
 
 impl BinOpKind {
     /// Returns the precedence of the `BinOpKind`
     pub fn prec(&self) -> i32 {
         match *self {
+            BinOpKind::Dot => 6,
             BinOpKind::Mul | BinOpKind::Div => 5,
             BinOpKind::Add | BinOpKind::Sub => 4,
             BinOpKind::Gr | BinOpKind::Lt | BinOpKind::GrEql | BinOpKind::LtEql => 3,
@@ -82,7 +84,8 @@ impl BinOpKind {
                 | BinOpKind::Gr
                 | BinOpKind::Lt
                 | BinOpKind::GrEql
-                | BinOpKind::LtEql => OpAssoc::Left,
+                | BinOpKind::LtEql
+                | BinOpKind::Dot => OpAssoc::Left,
         }
     }
 }
@@ -100,6 +103,7 @@ impl Literal for BinOpKind {
             BinOpKind::Lt => String::from("<"),
             BinOpKind::GrEql => String::from(">="),
             BinOpKind::LtEql => String::from("<="),
+            BinOpKind::Dot => String::from("."),
 
         }
     }
