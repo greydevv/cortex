@@ -196,7 +196,7 @@ impl<'a> Lexer<'_> {
                     ':' => TokenKind::Delim(DelimKind::ScopeSep),
                     _ => TokenKind::Delim(DelimKind::Colon),
                 },
-            '.' => TokenKind::BinOp(BinOpKind::Dot),
+            '.' => TokenKind::Delim(DelimKind::DotSep),
             '+' => TokenKind::BinOp(BinOpKind::Add),
             '-' => 
                 match self.peek_char() {

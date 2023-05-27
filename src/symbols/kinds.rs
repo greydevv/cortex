@@ -6,8 +6,10 @@ pub enum DelimKind {
     Comma,
     Scolon,
     Colon,
-    /// A scope resolution separator (e.g., `::` in `Animal::Dog`)
+    /// A scope resolution separator (e.g., `::` in `Foo::Bar`)
     ScopeSep,
+    /// A dot resolution separator (e.g., `.` in `foo.bar`)
+    DotSep,
 }
 
 impl Literal for DelimKind {
@@ -17,6 +19,7 @@ impl Literal for DelimKind {
             DelimKind::Scolon => String::from(";"),
             DelimKind::Colon => String::from(":"),
             DelimKind::ScopeSep => String::from("::"),
+            DelimKind::DotSep => String::from("."),
         }
     }
 }
@@ -55,15 +58,14 @@ pub enum BinOpKind {
     GrEql,
     LtEql,
 
-    // Member access.
-    Dot,
+    // // Member access.
+    // Dot,
 }
 
 impl BinOpKind {
     /// Returns the precedence of the `BinOpKind`
     pub fn prec(&self) -> i32 {
         match *self {
-            BinOpKind::Dot => 6,
             BinOpKind::Mul | BinOpKind::Div => 5,
             BinOpKind::Add | BinOpKind::Sub => 4,
             BinOpKind::Gr | BinOpKind::Lt | BinOpKind::GrEql | BinOpKind::LtEql => 3,
@@ -75,8 +77,7 @@ impl BinOpKind {
     /// Returns the associativity of the `BinOpKind`
     pub fn assoc(&self) -> OpAssoc {
         match *self {
-            BinOpKind::Eql
-                | BinOpKind::Dot => OpAssoc::Right,
+            BinOpKind::Eql => OpAssoc::Right,
             BinOpKind::Add
                 | BinOpKind::Sub
                 | BinOpKind::Mul
@@ -103,8 +104,6 @@ impl Literal for BinOpKind {
             BinOpKind::Lt => String::from("<"),
             BinOpKind::GrEql => String::from(">="),
             BinOpKind::LtEql => String::from("<="),
-            BinOpKind::Dot => String::from("."),
-
         }
     }
 }

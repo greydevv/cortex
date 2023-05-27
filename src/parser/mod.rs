@@ -16,12 +16,14 @@ use crate::ast::{
     Stmt,
     Func,
     Enum,
+    Struct,
     Expr,
     Ident,
     IdentInfo,
     ExprKind,
     StmtKind,
     IdentCtx,
+    DotRes,
 };
 use crate::symbols::{
     Token,
@@ -71,6 +73,7 @@ impl<'a> Parser<'_> {
                     KwdKind::Include => self.parse_include()?,
                     KwdKind::Func => self.parse_func()?,
                     KwdKind::Enum => self.parse_enum()?,
+                    KwdKind::Struct => self.parse_struct()?,
                     _ => unimplemented!("error message for bad start keyword: '{}'", kwd_kind)
                 };
                 module.add_node(child);
@@ -87,8 +90,8 @@ impl<'a> Parser<'_> {
 
     /// Parses an enumeration definition.
     fn parse_enum(&mut self) -> Result<Stmt> {
-        // Skip 'enum' keyword.
         let enum_kwd_span = self.tok.span;
+        // Skip 'enum' keyword.
         self.advance()?;
         let ident_span = self.tok.span;
         let ident_string = self.expect_id("identifier")?;
@@ -132,6 +135,51 @@ impl<'a> Parser<'_> {
                 ).into())
             }
             enumer.add_member(ident);
+            if let TokenKind::Delim(DelimKind::Comma) = self.tok.kind {
+                self.advance()?;
+            }
+        }
+
+        Ok(())
+    }
+
+    fn parse_struct(&mut self) -> Result<Stmt> {
+        let struct_kwd_span = self.tok.span;
+        // Skip 'struct' keyword.
+        self.advance()?;
+        let ident_span =  self.tok.span;
+        let ident_string = self.expect_id("identifier")?;
+        let mut struc = Struct::new(
+            Ident::new_unqual(
+                IdentInfo::new(
+                    ident_string.clone(),
+                    TyKind::UserDef(ident_string),
+                    IdentCtx::StructDef,
+                    self.new_loc(ident_span),
+                )
+            )
+        );
+        self.eat(TokenKind::BraceOpen(BraceKind::Curly))?;
+        self.parse_struct_members(&mut struc)?;
+        let closing_span = self.tok.span;
+        self.eat(TokenKind::BraceClosed(BraceKind::Curly))?;
+        Ok(Stmt::new(StmtKind::Struct(struc), self.new_loc(struct_kwd_span.to(&closing_span))))
+    }
+
+    fn parse_struct_members(&mut self, struc: &mut Struct) -> Result {
+        loop {
+            if let TokenKind::BraceClosed(BraceKind::Curly) = self.tok.kind {
+                break;
+            }
+            let ident = self.parse_type_annotation(IdentCtx::Def)?;
+            if let Some(original_ident) = struc.get_member(&ident) {
+                return Err(CortexError::dupe_struct_member(
+                    &self.ctx,
+                    &ident,
+                    original_ident,
+                ).into())
+            }
+            struc.add_member(ident);
             if let TokenKind::Delim(DelimKind::Comma) = self.tok.kind {
                 self.advance()?;
             }
@@ -240,6 +288,7 @@ impl<'a> Parser<'_> {
             KwdKind::While => self.parse_while()?,
             KwdKind::For => unimplemented!("parsing of for loop"),
             KwdKind::Enum => self.parse_enum()?,
+            KwdKind::Struct => unimplemented!("parsing for struct"),
         };
         Ok(node)
     }
@@ -478,7 +527,13 @@ impl<'a> Parser<'_> {
                     Box::new(expr)
                 ), self.new_loc(span)));
             },
-            TokenKind::Id(_) => return self.parse_ident_or_call(),
+            TokenKind::Id(_) => {
+                let (ident, expr_span) = self.parse_ident_or_call()?;
+                return Ok(Expr::new(
+                    ExprKind::Id(ident),
+                    self.new_loc(expr_span),
+                ));
+            },
             TokenKind::BraceOpen(ref brace_kind) if *brace_kind == BraceKind::Paren => {
                 // pass opening parenthesis
                 self.advance()?;
@@ -496,6 +551,24 @@ impl<'a> Parser<'_> {
         };
         self.advance()?;
         Ok(node)
+    }
+
+    fn parse_dot(&mut self, parent: Expr) -> Result<(DotRes, FileSpan)> {
+        let mut span = parent.loc().span().clone();
+        let mut dot_res = DotRes::new(parent);
+        loop {
+            match self.tok.kind {
+                TokenKind::Delim(DelimKind::DotSep) => {
+                    self.advance()?;
+                    span = span.to(&self.tok.span);
+                    let (ident, ..) = self.parse_ident_or_call()?;
+                    dot_res.add_ident(ident);
+                },
+                _ => break,
+            }
+        }
+
+        Ok((dot_res, span))
     }
 
     fn parse_ident(&mut self) -> Result<Ident> {
@@ -532,7 +605,7 @@ impl<'a> Parser<'_> {
 
     /// Parses a basic identifier or a function call if the identifier is followed by opening
     /// parenthesis.
-    fn parse_ident_or_call(&mut self) -> Result<Expr> {
+    fn parse_ident_or_call(&mut self) -> Result<(Ident, FileSpan)> {
         let mut ident = self.parse_ident()?;
         match self.tok.kind {
             TokenKind::BraceOpen(BraceKind::Paren) => {
@@ -542,17 +615,12 @@ impl<'a> Parser<'_> {
                 let close_paren_span = self.tok.span;
                 self.eat(TokenKind::BraceClosed(BraceKind::Paren))?;
                 ident.set_ctx(IdentCtx::FuncCall);
-                Ok(Expr::new(
-                    ExprKind::Call(ident, args),
-                    self.new_loc(open_paren_span.to(&close_paren_span)),
-                ))
+                ident.set_args(args);
+                Ok((ident, open_paren_span.to(&close_paren_span)))
             }
             _ => {
                 let ident_span = ident.span();
-                Ok(Expr::new(
-                    ExprKind::Id(ident),
-                    self.new_loc(ident_span),
-                ))
+                Ok((ident, ident_span))
             }
         }
     }
@@ -584,6 +652,14 @@ impl<'a> Parser<'_> {
     /// Parses a binary expression, e.g., `(8 - 4) * 4 - 3`.
     fn parse_expr_helper(&mut self, min_prec: i32) -> Result<Expr> {
         let mut lhs = self.parse_term()?;
+
+        if self.tok.kind == TokenKind::Delim(DelimKind::DotSep) {
+            let (dot_res, dot_res_span) = self.parse_dot(lhs)?;
+            lhs = Expr::new(
+                ExprKind::DotRes(dot_res),
+                self.new_loc(dot_res_span),
+            );
+        }
 
         loop {
             match self.tok.kind.clone() {

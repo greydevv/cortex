@@ -187,12 +187,11 @@ impl CortexError {
         ).into()
     }
 
-    /// Creates an error describing a duplicate enum member.
-    pub fn dupe_enum_member(ctx: &SessCtx, ident: &Ident, original_ident: &Ident) -> CortexError {
+    fn dupe_ident_helper(ctx: &SessCtx, ident: &Ident, original_ident: &Ident, structure_kind: &str) -> CortexError {
         let diags = vec![
             Diagnostic::new_with_spans(
                 ctx,
-                format!("duplicate enum member '{}'", ident),
+                format!("duplicate {} member '{}'", structure_kind, ident),
                 DiagnosticKind::Error,
                 vec![ident.loc().clone()],
             ),
@@ -204,6 +203,35 @@ impl CortexError {
             ),
         ];
         CortexError::from(diags)
+    }
+
+    /// Creates an error describing a duplicate enum member.
+    pub fn dupe_enum_member(ctx: &SessCtx, ident: &Ident, original_ident: &Ident) -> CortexError {
+        CortexError::dupe_ident_helper(ctx, ident, original_ident, "enum")
+    }
+
+    /// Creates an error describing a duplicate struct member.
+    pub fn dupe_struct_member(ctx: &SessCtx, ident: &Ident, original_ident: &Ident) -> CortexError {
+        CortexError::dupe_ident_helper(ctx, ident, original_ident, "struct")
+    }
+
+    pub fn illegal_member_access(ctx: &SessCtx, loc: SourceLoc, ty_kind: TyKind) -> CortexError {
+        Diagnostic::new_with_spans(
+            ctx,
+            format!("type '{}' does not have members", ty_kind),
+            DiagnosticKind::Error,
+            vec![loc]
+        ).into()
+    }
+
+    // Creates an error describing a nonexistent member (e.g., `bar` does not exist in `foo.bar`).
+    pub fn nonexistent_member(ctx: &SessCtx, parent_ty: TyKind, member: &Ident) -> CortexError {
+        Diagnostic::new_with_spans(
+            ctx,
+            format!("member '{}' does not exist on type '{}'", member.name(), parent_ty),
+            DiagnosticKind::Error,
+            vec![member.loc().clone()]
+        ).into()
     }
 
     /// Creates an error describing an include statement with a file path that doesn't exist.
@@ -282,7 +310,8 @@ impl CortexError {
             IdentCtx::Def
                 | IdentCtx::Param
                 | IdentCtx::FuncDef
-                | IdentCtx::EnumDef =>
+                | IdentCtx::EnumDef
+                | IdentCtx::StructDef =>
                     format!(
                         "'{}' was already defined",
                         info,

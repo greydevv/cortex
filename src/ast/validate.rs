@@ -7,6 +7,7 @@ use crate::ast::{
     Module,
     Func,
     Enum,
+    Struct,
     Expr,
     ExprKind,
     Compound,
@@ -15,6 +16,7 @@ use crate::ast::{
     LitKind,
     Ident,
     ScopeRes,
+    DotRes,
 };
 use crate::ast::symbol_table::{
     SymbolTable,
@@ -219,7 +221,7 @@ impl<'a> Validator<'_> {
         }
     }
 
-    fn symb_tab_query(&mut self, ident: &mut Ident) -> Result<&Symbol> {
+    fn symb_tab_query(&self, ident: &mut Ident) -> Result<&Symbol> {
         match ident {
             Ident::Unqual(ref info) =>
                 // Here we have the case 'foo'.
@@ -257,85 +259,135 @@ impl<'a> Validator<'_> {
         }
     }
 
+    // TODO: Maybe chance to Vec<Result<TyKind>> to show multiple errors? Not sure what kind of
+    // side-effects this would have on accurate error reporting.
+    fn validate_call_args(&mut self, expected_args: &Vec<Symbol>, received_args: &mut Vec<Box<Expr>>) -> Result {
+        received_args.iter_mut()
+            .zip(expected_args)
+            .try_for_each(|(received_arg, expected_arg)| -> Result {
+                let arg_ty_kind = self.validate_expr(received_arg)?;
+                let type_ok = match expected_arg.ident().ty_kind() {
+                    TyKind::UserDef(ty_string) => {
+                        if let TyKind::UserDef(ref arg_ty_string, ..) = arg_ty_kind {
+                            // Both types are user-defined, check if they
+                            // match.
+                            arg_ty_string == ty_string
+                        } else {
+                            // If one type isn't user defined, we know they
+                            // don't match.
+                            false
+                        }
+                    },
+                    _ => &arg_ty_kind == expected_arg.ident().ty_kind(),
+                };
+                if !type_ok {
+                    Err(CortexError::incompat_types(
+                        &self.ctx,
+                        &expected_arg.ident().ty_kind(),
+                        &arg_ty_kind,
+                        received_arg.loc().clone()).into()
+                    )
+                } else {
+                    Ok(())
+                }
+            })
+    }
+
     /// Validates a generic expression node.
     fn validate_expr(&mut self, expr: &mut Expr) -> Result<TyKind> {
         let mut loc = expr.loc().clone();
         match expr.kind {
-            ExprKind::Id(ref mut ident) => self.symb_tab_query(ident).and_then(|symbol| Ok(symbol.ident().ty_kind().clone())),
             ExprKind::Lit(ref lit_kind) => Ok(self.validate_lit(lit_kind)),
             ExprKind::Binary(ref op_kind, ref mut lhs, ref mut rhs) => self.validate_bin_op(op_kind, lhs, rhs),
             ExprKind::Unary(ref unary_op_kind, ref mut expr) => self.validate_unary_op(unary_op_kind, expr),
-            ExprKind::Call(ref mut ident, ref mut args) => {
-                let func_symbol = self.symb_tab_query(ident)?.clone();
-                let func_ty_kind = func_symbol.ident().ty_kind().clone();
-                match func_symbol.kind() {
-                    SymbolKind::Func(expected_args) =>
-                        // Check if correct amount of params are passed
-                        if args.len() == expected_args.len() {
-                            // Check types of params
-                            args.iter_mut()
-                                .zip(expected_args)
-                                .try_for_each(|(arg, expected_arg)| -> Result {
-                                    let arg_ty_kind = self.validate_expr(arg)?;
-                                    let type_ok = match expected_arg.ident().ty_kind() {
-                                        TyKind::UserDef(ty_string) => {
-                                            if let TyKind::UserDef(ref arg_ty_string, ..) = arg_ty_kind {
-                                                // Both types are user-defined, check if they
-                                                // match.
-                                                arg_ty_string == ty_string
-                                            } else {
-                                                // If one type isn't user defined, we know they
-                                                // don't match.
-                                                false
-                                            }
-                                        },
-                                        _ => &arg_ty_kind == expected_arg.ident().ty_kind(),
-                                    };
-                                    if !type_ok {
-                                        println!("Before error: {}", arg.loc().span());
-                                        Err(CortexError::incompat_types(&self.ctx, &expected_arg.ident().ty_kind(), &arg_ty_kind, arg.loc().clone()).into())
-                                    } else {
-                                        Ok(())
-                                    }
-                                })
-                        } else {
-                            // Capture certain arguments in underline depending on
-                            // missing/excessive arguments
-                            if expected_args.is_empty() {
-                                // Capture every argument in underline
-                                // Unwrapping safe, args is not empty
-                                let beg_span = args.first().unwrap().loc().span();
-                                let end_span = args.last().unwrap().loc().span();
-                                loc.set_span(beg_span.to(end_span))
+            ExprKind::Id(ref mut ident) => {
+                let symbol = self.symb_tab_query(ident)?;
+                if let Some(args) = ident.args_mut() {
+                    let func_symbol = symbol.to_owned();
+                    match func_symbol.kind() {
+                        SymbolKind::Func(expected_args) =>
+                            // Check if correct amount of params are passed
+                            if args.len() == expected_args.len() {
+                                // Check types of params
+                                self.validate_call_args(expected_args, args)?;
+                                // TODO: Need to check if this is void. Let `x = void` makes no
+                                // sense.
+                                Ok(func_symbol.ident().ty_kind().clone())
                             } else {
-                                if args.len() < expected_args.len() {
-                                    let pos = match args.last() {
-                                        // Point after last parameter of function call
-                                        Some(arg) => arg.loc().span().end,
-                                        // Point after opening parenthesis of function call
-                                        None => FilePos::new(loc.span().beg.line, loc.span().beg.col+1),
-                                    };
-                                    loc.set_span(FileSpan::one(pos))
-                                } else {
-                                    // Unwrapping safe, args.len() > expected_args.len()
-                                    let beg_span = args.get(expected_args.len()).unwrap().loc().span();
-                                    // Unwrapping safe, args not empty
+                                // Capture certain arguments in underline depending on
+                                // missing/excessive arguments
+                                if expected_args.is_empty() {
+                                    // Capture every argument in underline
+                                    // Unwrapping safe, args is not empty
+                                    let beg_span = args.first().unwrap().loc().span();
                                     let end_span = args.last().unwrap().loc().span();
                                     loc.set_span(beg_span.to(end_span))
+                                } else {
+                                    if args.len() < expected_args.len() {
+                                        let pos = match args.last() {
+                                            // Point after last parameter of function call
+                                            Some(arg) => arg.loc().span().end,
+                                            // Point after opening parenthesis of function call
+                                            None => FilePos::new(loc.span().beg.line, loc.span().beg.col+1),
+                                        };
+                                        loc.set_span(FileSpan::one(pos))
+                                    } else {
+                                        // Unwrapping safe, args.len() > expected_args.len()
+                                        let beg_span = args.get(expected_args.len()).unwrap().loc().span();
+                                        // Unwrapping safe, args not empty
+                                        let end_span = args.last().unwrap().loc().span();
+                                        loc.set_span(beg_span.to(end_span))
+                                    }
                                 }
-                            }
-                            Err(CortexError::args_n_mismatch(&self.ctx, expected_args.len(), args.len(), loc).into())
-                        },
-                    _ => return Err(CortexError::illegal_ident_call(&self.ctx, loc, &func_symbol.ident()).into()), 
-                }?;
-                Ok(func_ty_kind)
+                                Err(CortexError::args_n_mismatch(&self.ctx, expected_args.len(), args.len(), loc).into())
+                            },
+                        _ => Err(CortexError::illegal_ident_call(&self.ctx, loc, &func_symbol.ident()).into()), 
+                    }
+                } else {
+                    self.symb_tab_query(ident).and_then(|symbol| Ok(symbol.ident().ty_kind().clone()))
+                }
             },
             ExprKind::ScopeRes(ref mut scope_res) => self.validate_scope_res(scope_res),
+            ExprKind::DotRes(ref mut dot_res) => self.validate_dot_res(dot_res),
         }
     }
 
     fn validate_scope_res(&mut self, _scope_res: &mut ScopeRes) -> Result<TyKind> {
-        todo!("validation for ExprKind::ScopeRes")
+        unimplemented!("validation for ExprKind::ScopeRes")
+    }
+
+    fn validate_dot_res(&mut self, dot_res: &mut DotRes) -> Result<TyKind> {
+        unimplemented!("validation for ExprKind::DotRes");
+        // let parent_ty_kind = self.validate_expr(dot_res.expr_mut())?;
+        // let parent_symbol = if let TyKind::UserDef(ref parent_ty_name) = parent_ty_kind {
+        //     match self.symb_tab.query_raw(parent_ty_name) {
+        //         Some(symbol) => symbol,
+        //         None => panic!("This should never happen."),
+        //     }
+        // } else {
+        //     return Err(CortexError::illegal_member_access(&self.ctx, dot_res.expr().loc().clone(), parent_ty_kind).into())
+        // };
+        // let mut symbol = parent_symbol.to_owned();
+        // for member in dot_res.idents_mut() {
+        //     let scope = match symbol.kind() {
+        //         SymbolKind::Struct(scope) => scope,
+        //         _ => panic!("Not a struct: {} ({})", symbol.name(), symbol.ident().ty_kind()),
+        //     };
+        //     match member {
+        //         Ident::Unqual(ref info) => {
+        //             match scope.query(&info.name) {
+        //                 Some(found_symbol) => {
+        //                     member.set_ty_kind(found_symbol.ident().ty_kind().clone());
+        //                     symbol = found_symbol.to_owned();
+        //                 },
+        //                 None => return Err(CortexError::nonexistent_member(&self.ctx, parent_ty_kind, member).into()),
+        //             }
+        //         },
+        //         Ident::Qual(..) => todo!(),
+        //     }
+        // }
+        //
+        // Ok(TyKind::Void)
     }
 
     /// Validates a block.
@@ -406,6 +458,7 @@ impl<'a> Validator<'_> {
             StmtKind::Compound(ref mut compound) => self.validate_compound(compound, false),
             StmtKind::Incl(ref mut module) => self.validate(module).and_then(|_| Ok(TyKind::Void)),
             StmtKind::Enum(ref mut enumer) => self.validate_enum(enumer).and_then(|_| Ok(TyKind::Void)),
+            StmtKind::Struct(ref mut struc) => self.validate_struct(struc).and_then(|_| Ok(TyKind::Void)),
         }
     }
 
@@ -417,6 +470,17 @@ impl<'a> Validator<'_> {
             })
             .collect();
         let symbol = Symbol::enumeration(enumer.ident().clone(), enum_member_symbols);
+        self.symb_tab_insert(symbol)
+    }
+
+    /// Validates a struct definition.
+    fn validate_struct(&mut self, struc: &mut Struct) -> Result {
+        let struct_member_symbols = struc.members.iter()
+            .map(|m: &Ident| -> Symbol {
+                Symbol::new_unqual(m.clone())
+            })
+            .collect();
+        let symbol = Symbol::struc(struc.ident().clone(), struct_member_symbols);
         self.symb_tab_insert(symbol)
     }
 
@@ -471,13 +535,11 @@ impl<'a> Validator<'_> {
 
     /// Helper method for validating a binary operation.
     fn validate_bin_op(&mut self, bin_op_kind: &BinOpKind, lhs: &mut Expr, rhs: &mut Expr) -> Result<TyKind> {
-        let lhs_ty = self.validate_expr(lhs)?;
-        let rhs_ty = self.validate_expr(rhs)?;
-        if lhs_ty.compat(&rhs_ty).is_none() {
-            return Err(CortexError::incompat_types(self.ctx, &lhs_ty, &rhs_ty, rhs.loc().clone()).into());
-        }
         // TODO: Need to check which operators can be applied to what type! And if an operator can
         // be applied to a specific type, what type does that operation yield?
+        // Get type of left-hand side.
+        let lhs_ty = self.validate_expr(lhs)?;
+
         let op_ty = match bin_op_kind {
             BinOpKind::Eql => TyKind::Void,
             BinOpKind::Gr
@@ -490,6 +552,13 @@ impl<'a> Validator<'_> {
                 | BinOpKind::Mul
                 | BinOpKind::Div => TyKind::Int(IntSize::N32),
         };
+
+        // Get type of right-hand side.
+        let rhs_ty = self.validate_expr(rhs)?;
+        if lhs_ty.compat(&rhs_ty).is_none() {
+            return Err(CortexError::incompat_types(self.ctx, &lhs_ty, &rhs_ty, rhs.loc().clone()).into());
+        }
+
 
         if lhs_ty != op_ty {
             return Err(CortexError::incompat_types_in_bin_op(

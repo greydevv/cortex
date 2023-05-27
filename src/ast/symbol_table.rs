@@ -134,6 +134,17 @@ impl Symbol {
         }
     }
 
+    pub fn struc(ident: Ident, members: Vec<Symbol>) -> Symbol {
+        let mut member_map = Scope::new();
+        for m in members {
+            member_map.insert(m);
+        }
+        Symbol {
+            ident,
+            kind: SymbolKind::Struct(member_map),
+        }
+    }
+
     pub fn enumeration(ident: Ident, members: Vec<Symbol>) -> Symbol {
         let mut member_map = Scope::new();
         for m in members {
@@ -185,8 +196,8 @@ impl Symbol {
 #[derive(Clone)]
 pub enum SymbolKind {
     Func(Vec<Symbol>),
-    // Struct(Vec<Symbol>),
     Enum(Scope),
+    Struct(Scope),
     Ident,
 }
 

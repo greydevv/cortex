@@ -33,6 +33,8 @@ pub enum IdentCtx {
     FuncDef,
     /// Enum definition.
     EnumDef,
+    /// Struct definition.
+    StructDef,
 }
 
 impl IdentCtx {
@@ -45,11 +47,13 @@ impl IdentCtx {
 }
 
 /// The identifier object.
-#[derive(PartialEq, Clone)]
+#[derive(Clone)]
 pub struct IdentInfo {
     name: String,
     ty_kind: TyKind,
     ctx: IdentCtx,
+    // If this is `Some(..)`, then it should be treated as a method call.
+    args: Option<Vec<Box<Expr>>>,
     loc: SourceLoc,
 }
 
@@ -60,14 +64,20 @@ impl IdentInfo {
             name,
             ty_kind,
             ctx,
+            args: None,
             loc,
         }
     }
 
-    /// Gets the raw identifier.
-    // pub fn get_raw(&self) -> &String {
-    //     &self.raw
-    // }
+    pub fn new_call(name: String, ret_ty: TyKind, args: Vec<Box<Expr>>, loc: SourceLoc) -> IdentInfo {
+        IdentInfo {
+            name,
+            ty_kind: ret_ty,
+            ctx: IdentCtx::FuncCall,
+            args: Some(args),
+            loc,
+        }
+    }
 
     /// Gets the identifier's type.
     pub fn ty_kind(&self) -> &TyKind {
@@ -102,6 +112,18 @@ impl IdentInfo {
         self.loc.file_path()
     }
 
+    pub fn set_args(&mut self, args: Vec<Box<Expr>>) {
+        self.args = Some(args);
+    }
+
+    pub fn args_mut(&mut self) -> &mut Option<Vec<Box<Expr>>> {
+        &mut self.args
+    }
+
+    pub fn args(&self) -> &Option<Vec<Box<Expr>>> {
+        &self.args
+    }
+
     /// Obtain a reference to the location of the identifier in the source code.
     pub fn loc(&self) -> &SourceLoc {
         &self.loc
@@ -115,6 +137,7 @@ impl IdentInfo {
             IdentCtx::FuncCall => "function call",
             IdentCtx::FuncDef => "function",
             IdentCtx::EnumDef => "enum",
+            IdentCtx::StructDef => "struct",
         }.to_string()
     }
 }
@@ -125,7 +148,7 @@ impl fmt::Display for IdentInfo {
     }
 }
 
-#[derive(PartialEq, Clone)]
+#[derive(Clone)]
 pub enum Ident {
     Unqual(IdentInfo),
     Qual(IdentInfo, IdentInfo),
@@ -174,7 +197,7 @@ impl Ident {
     }
 
     pub fn set_ty_kind(&mut self, ty_kind: TyKind) {
-        self.info_mut().set_ty_kind(ty_kind)
+        self.info_mut().set_ty_kind(ty_kind);
     }
 
     pub fn loc(&self) -> &SourceLoc {
@@ -182,7 +205,19 @@ impl Ident {
     }
 
     pub fn set_ctx(&mut self, ctx: IdentCtx) {
-        self.info_mut().set_ctx(ctx)
+        self.info_mut().set_ctx(ctx);
+    }
+
+    pub fn args_mut(&mut self) -> &mut Option<Vec<Box<Expr>>> {
+        self.info_mut().args_mut()
+    }
+
+    pub fn args(&self) -> &Option<Vec<Box<Expr>>> {
+        self.info().args()
+    }
+
+    pub fn set_args(&mut self, args: Vec<Box<Expr>>) {
+        self.info_mut().set_args(args);
     }
 
     pub fn pretty_ctx(&self) -> String {
@@ -254,9 +289,45 @@ pub enum ExprKind {
     /// Numeric literals.
     Lit(LitKind),
     /// Invocations (function calls).
-    Call(Ident, Vec<Box<Expr>>),
-    /// Scope resolution (e.g., `Animal::Dog`)
+    // Call(Ident, Vec<Box<Expr>>),
+    /// Scope resolution (e.g., `foo::bar`)
     ScopeRes(ScopeRes),
+    DotRes(DotRes),
+}
+
+#[derive(Clone)]
+pub struct DotRes {
+    expr: Box<Expr>,
+    idents: Vec<Ident>,
+}
+
+impl DotRes {
+    pub fn new(expr: Expr) -> DotRes {
+        DotRes {
+            expr: Box::new(expr),
+            idents: Vec::new(),
+        }
+    }
+
+    pub fn add_ident(&mut self, ident: Ident) {
+        self.idents.push(ident);
+    }
+
+    pub fn idents(&self) -> &Vec<Ident> {
+        &self.idents
+    }
+
+    pub fn idents_mut(&mut self) -> &mut Vec<Ident> {
+        &mut self.idents
+    }
+
+    pub fn expr(&self) -> &Expr {
+        &self.expr
+    }
+
+    pub fn expr_mut(&mut self) -> &mut Expr {
+        &mut self.expr
+    }
 }
 
 #[derive(Clone)]
@@ -353,6 +424,7 @@ pub enum StmtKind {
     /// Standalone expression followed by a semicolon.
     Expr(Expr),
     Enum(Enum),
+    Struct(Struct),
 }
 
 #[derive(Clone)]
@@ -388,6 +460,64 @@ impl AstDebug for Enum {
 impl Enum {
     pub fn new(ident: Ident) -> Enum {
         Enum {
+            ident,
+            members: Vec::new(),
+        }
+    }
+
+    pub fn get_member(&self, member: &Ident) -> Option<&Ident> {
+        for m in &self.members {
+            if m.name() == member.name() {
+                return Some(m);
+            }
+        }
+        None
+    }
+
+    pub fn add_member(&mut self, member: Ident) {
+        self.members.push(member)
+    }
+
+    pub fn ident(&self) -> &Ident {
+        &self.ident
+    }
+}
+
+#[derive(Clone)]
+pub struct Struct {
+    ident: Ident,
+    members: Vec<Ident>,
+}
+
+impl AstDebug for Struct {
+    fn debug(&self, indent: Indent) -> String {
+        format!("({})\n{}",
+            self.ident,
+            self.members.iter()
+                .enumerate()
+                .map(|(i, ident)| -> String {
+                    if i == self.members.len() - 1 {
+                        format!("{}{}: {}",
+                            indent,
+                            ident,
+                            ident.ty_kind(),
+                       )
+                    } else {
+                        format!("{}{}: {}\n",
+                            indent,
+                            ident,
+                            ident.ty_kind(),
+                        )
+                    }
+                })
+                .collect::<String>()
+        )
+    }
+}
+
+impl Struct {
+    pub fn new(ident: Ident) -> Struct {
+        Struct {
             ident,
             members: Vec::new(),
         }
@@ -620,6 +750,12 @@ impl AstDebug for Stmt {
                     indent,
                     self.kind,
                     enum_def.debug(indent.plus()),
+                ),
+            StmtKind::Struct(ref struct_def) =>
+                format!("{}{}{}",
+                    indent,
+                    self.kind,
+                    struct_def.debug(indent.plus()),
                 )
         }
     }
@@ -666,34 +802,40 @@ impl AstDebug for Expr {
                     ident.ty_kind(),
                     ident.ctx(),
                 ),
-            ExprKind::Call(ident, args) if args.is_empty() =>
-                // No arguments
-                format!("{}{}({})",
-                    indent,
-                    self.kind,
-                    ident,
-                ),
-            ExprKind::Call(ident, args) =>
-                format!("{}{}({})\n{}",
-                    indent,
-                    self.kind,
-                    ident,
-                    args.iter()
-                        .enumerate()
-                        .map(|(i, arg)| -> String {
-                            if i == args.len() - 1 { 
-                                arg.debug(indent.plus())
-                            } else { 
-                                arg.debug(indent.plus()) + "\n"
-                            }
-                        })
-                        .collect::<String>()
-                ),
+            // ExprKind::Call(ident, args) if args.is_empty() =>
+            //     // No arguments
+            //     format!("{}{}({})",
+            //         indent,
+            //         self.kind,
+            //         ident,
+            //     ),
+            // ExprKind::Call(ident, args) =>
+            //     format!("{}{}({})\n{}",
+            //         indent,
+            //         self.kind,
+            //         ident,
+            //         args.iter()
+            //             .enumerate()
+            //             .map(|(i, arg)| -> String {
+            //                 if i == args.len() - 1 { 
+            //                     arg.debug(indent.plus())
+            //                 } else { 
+            //                     arg.debug(indent.plus()) + "\n"
+            //                 }
+            //             })
+            //             .collect::<String>()
+            //     ),
             ExprKind::ScopeRes(scope_res) =>
                 format!("{}{}\n{}",
                     indent,
                     self.kind,
                     scope_res.debug(indent.plus()),
+                ),
+            ExprKind::DotRes(dot_res) =>
+                format!("{}{}\n{}",
+                    indent,
+                    self.kind,
+                    dot_res.debug(indent.plus())
                 ),
         }
     }
@@ -708,6 +850,21 @@ impl AstDebug for ScopeRes {
                     format!("{}{}", indent, ident)
                 } else { 
                     format!("{}{}::", indent, ident)
+                }
+            })
+            .collect::<String>()
+    }
+}
+
+impl AstDebug for DotRes {
+    fn debug(&self, indent: Indent) -> String {
+        self.idents.iter()
+            .enumerate()
+            .map(|(i, ident)| -> String {
+                if i == self.idents.len() - 1 { 
+                    format!("{}{}: {}", indent, ident.name(), ident.ty_kind())
+                } else { 
+                    format!("{}{}: {}\n", indent, ident.name(), ident.ty_kind())
                 }
             })
             .collect::<String>()
