@@ -11,8 +11,8 @@ clap = { version = "4.1.6", features=["derive", "error-context", "cargo"] }
 
 [[bin]]
 name = "cortex"
-path = "cortex/src/main.rs"
+path = "src/cortex/src/main.rs"
 
 [lib]
 doctest = false
-path = "cortex/src/lib.rs"
+path = "src/cortex/src/lib.rs"
