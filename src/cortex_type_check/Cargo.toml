@@ -1,0 +1,11 @@
+[package]
+name = "cortex_type_check"
+version = "0.1.0"
+edition = "2021"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+cortex_symbols = { path = "../cortex_symbols" }
+cortex_errors = { path = "../cortex_errors" }
+cortex_ast = { path = "../cortex_ast" }

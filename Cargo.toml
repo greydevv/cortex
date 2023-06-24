@@ -5,14 +5,17 @@ edition = "2021"
 
 [dependencies]
 colored = "2.0.0"
+clap = { version = "4.1.6", features=["derive", "error-context", "cargo"] }
 strum = "0.24"
 strum_macros = "0.24"
-clap = { version = "4.1.6", features=["derive", "error-context", "cargo"] }
+
+cortex_driver = { path = "src/cortex_driver" }
+cortex_symbols = { path = "src/cortex_symbols" }
+cortex_lex = { path = "src/cortex_lex" }
+cortex_parse = { path = "src/cortex_parse" }
+cortex_type_check = { path = "src/cortex_type_check" }
+cortex_errors = { path = "src/cortex_errors" }
 
 [[bin]]
 name = "cortex"
-path = "src/cortex/src/main.rs"
-
-[lib]
-doctest = false
-path = "src/cortex/src/lib.rs"
+path = "src/main.rs"
