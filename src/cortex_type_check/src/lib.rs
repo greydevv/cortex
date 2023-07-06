@@ -37,6 +37,7 @@ use cortex_ast::{
     ExprKind,
     StmtKind,
     DotRes,
+    Call,
 };
 use crate::symbol_table::{
     SymbolTable,
@@ -157,7 +158,7 @@ impl<'a> Validator<'_> {
         }
     }
 
-    // TODO: Maybe chance to Vec<Result<TyKind>> to show multiple errors? Not sure what kind of
+    // TODO: Maybe change to Vec<Result<TyKind>> to show multiple errors? Not sure what kind of
     // side-effects this would have on accurate error reporting.
     fn validate_call_args(&mut self, expected_args: &Vec<Symbol>, received_args: &mut Vec<Box<Expr>>) -> Result {
         received_args.iter_mut()
@@ -193,7 +194,7 @@ impl<'a> Validator<'_> {
 
     /// Validates a generic expression node.
     fn validate_expr(&mut self, expr: &mut Expr) -> Result<TyKind> {
-        let mut loc = expr.loc().clone();
+        let loc = expr.loc().clone();
         match expr.kind {
             ExprKind::Lit(ref lit_kind) => Ok(self.validate_lit(lit_kind)),
             ExprKind::Binary(ref op_kind, ref mut lhs, ref mut rhs) => self.validate_bin_op(op_kind, lhs, rhs),
@@ -201,49 +202,52 @@ impl<'a> Validator<'_> {
             ExprKind::Id(ref mut ident) => self.symb_tab_query(ident).and_then(|symbol| Ok(symbol.ident().ty_kind().clone())),
             ExprKind::ScopeRes(ref mut _scope_res) => unimplemented!("validation for ExprKind::ScopeRes"),
             ExprKind::DotRes(ref mut dot_res) => self.validate_dot_res(dot_res),
-            ExprKind::Call(ref mut call) => {
-                let func_symbol = self.symb_tab_query(call.ident_mut())?.to_owned();
-                let args = call.args();
-                match func_symbol.kind() {
-                    SymbolKind::Func(expected_args) =>
-                        // Check if correct amount of params are passed
-                        if args.len() == expected_args.len() {
-                            // Check types of params
-                            self.validate_call_args(expected_args, call.args_mut())?;
-                            // TODO: Need to check if this is void. Let `x = void` makes no
-                            // sense.
-                            Ok(func_symbol.ident().ty_kind().clone())
+            ExprKind::Call(ref mut call) => self.validate_call(call, loc),
+        }
+    }
+
+    fn validate_call(&mut self, call: &mut Call, expr_loc: SourceLoc) -> Result<TyKind> {
+        let mut loc = expr_loc.clone();
+        let func_symbol = self.symb_tab_query(call.ident_mut())?.to_owned();
+        let args = call.args();
+        match func_symbol.kind() {
+            SymbolKind::Func(expected_args) =>
+                // Check if correct amount of params are passed
+                if args.len() == expected_args.len() {
+                    // Check types of params
+                    self.validate_call_args(expected_args, call.args_mut())?;
+                    // TODO: Need to check if this is void. Let `x = void` makes no
+                    // sense.
+                    Ok(func_symbol.ident().ty_kind().clone())
+                } else {
+                    // Capture certain arguments in underline depending on
+                    // missing/excessive arguments
+                    if expected_args.is_empty() {
+                        // Capture every argument in underline
+                        // Unwrapping safe, args is not empty
+                        let beg_span = args.first().unwrap().loc().span();
+                        let end_span = args.last().unwrap().loc().span();
+                        loc.set_span(beg_span.to(end_span));
+                    } else {
+                        if args.len() < expected_args.len() {
+                            let pos = match args.last() {
+                                // Point after last parameter of function call
+                                Some(arg) => *arg.loc().span().end(),
+                                // Point after opening parenthesis of function call
+                                None => *call.args_span().beg(),
+                            };
+                            loc.set_span(FileSpan::one(pos));
                         } else {
-                            // Capture certain arguments in underline depending on
-                            // missing/excessive arguments
-                            if expected_args.is_empty() {
-                                // Capture every argument in underline
-                                // Unwrapping safe, args is not empty
-                                let beg_span = args.first().unwrap().loc().span();
-                                let end_span = args.last().unwrap().loc().span();
-                                loc.set_span(beg_span.to(end_span))
-                            } else {
-                                if args.len() < expected_args.len() {
-                                    let pos = match args.last() {
-                                        // Point after last parameter of function call
-                                        Some(arg) => *arg.loc().span().end(),
-                                        // Point after opening parenthesis of function call
-                                        None => FilePos::new(loc.span().beg().line(), loc.span().beg().col()+1),
-                                    };
-                                    loc.set_span(FileSpan::one(pos))
-                                } else {
-                                    // Unwrapping safe, args.len() > expected_args.len()
-                                    let beg_span = args.get(expected_args.len()).unwrap().loc().span();
-                                    // Unwrapping safe, args not empty
-                                    let end_span = args.last().unwrap().loc().span();
-                                    loc.set_span(beg_span.to(end_span))
-                                }
-                            }
-                            Err(CortexError::args_n_mismatch(&self.ctx, expected_args.len(), args.len(), loc).into())
-                        },
-                    _ => Err(CortexError::illegal_ident_call(&self.ctx, loc, &func_symbol.ident()).into()), 
-                }
-            }
+                            // Unwrapping safe, args.len() > expected_args.len()
+                            let beg_span = args.get(expected_args.len()).unwrap().loc().span();
+                            // Unwrapping safe, args not empty
+                            let end_span = args.last().unwrap().loc().span();
+                            loc.set_span(beg_span.to(end_span));
+                        }
+                    }
+                    Err(CortexError::args_n_mismatch(&self.ctx, expected_args.len(), args.len(), loc).into())
+                },
+            _ => Err(CortexError::illegal_ident_call(&self.ctx, loc, &func_symbol.ident()).into()), 
         }
     }
 
@@ -252,7 +256,7 @@ impl<'a> Validator<'_> {
     // }
 
     fn validate_dot_res(&mut self, _dot_res: &mut DotRes) -> Result<TyKind> {
-        unimplemented!("validation for ExprKind::DotRes");
+        Ok(TyKind::Void)
         // let parent_ty_kind = self.validate_expr(dot_res.expr_mut())?;
         // let parent_symbol = if let TyKind::UserDef(ref parent_ty_name) = parent_ty_kind {
         //     match self.symb_tab.query_raw(parent_ty_name) {
