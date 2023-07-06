@@ -89,6 +89,7 @@ pub enum ExprKind {
     Call(Call),
     /// Scope resolution (e.g., `foo::bar`)
     ScopeRes(ScopeRes),
+    /// Dot resolution (e.g., `foo.bar`)
     DotRes(DotRes),
 }
 
