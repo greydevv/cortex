@@ -9,6 +9,7 @@ edition = "2021"
 clap = { version = "4.1.6", features=["derive", "error-context", "cargo"] }
 
 cortex_errors = { path = "../cortex_errors" }
+cortex_type_check = { path = "../cortex_type_check" }
 cortex_symbols = { path = "../cortex_symbols" }
 cortex_lex = { path = "../cortex_lex" }
 cortex_parse = { path = "../cortex_parse" }

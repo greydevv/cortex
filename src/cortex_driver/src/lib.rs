@@ -4,6 +4,7 @@ use crate::args::parse_args;
 
 use cortex_lex::Lexer;
 use cortex_parse::Parser;
+use cortex_type_check::Validator;
 use cortex_errors::{ Result, CortexError };
 use cortex_symbols::{
     SessCtx,
@@ -25,8 +26,8 @@ pub fn compile(file_path: FilePath) -> Result {
     let mut parser = Parser::new(&ctx)?;
     parser.parse()
         .and_then(|ref mut module| {
-            // let mut vd = Validator::new(&ctx);
-            // vd.validate(module)?;
+            let mut vd = Validator::new(&ctx);
+            vd.validate(module)?;
             println!("{}", module.debug_string());
             Ok(())
         })?;
